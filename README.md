@@ -17,6 +17,8 @@ Server echos incoming messages to outbound `auction` clients
 Included in these messages are special `epoch` messages on 1 second intervals 
 
 ## API
+https://github.com/sidepit/Public-API/blob/main/spapi.proto 
+
 ### Incoming orders 
 new order from user:
 ```
