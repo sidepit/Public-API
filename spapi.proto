@@ -1,0 +1,28 @@
+syntax = "proto3";
+
+message Transaction {
+    optional int32 version = 1;
+    optional uint64 timestamp = 10; 
+    oneof tx {
+        NewOrder new_order = 20;
+        string cancel_orderid = 30;
+        AuctionBid auction_bid = 40;
+    }
+    optional bytes id = 100;
+    optional bytes signature = 110;   
+}
+
+message NewOrder {
+    optional bool side = 10;
+    optional int32 size = 20;
+    optional int32 price = 30;
+    optional string symbol = 40;
+}
+
+
+message AuctionBid {
+    optional int32 epoch = 10;
+    optional string hash = 20;
+    optional string ordering_salt = 30;
+    optional int32 bid = 40;  // in satoshis 
+}
