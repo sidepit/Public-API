@@ -1,79 +1,72 @@
 # Sidepit Protocol Information
 Information regarding `sidepit public api` input and output protocol 
 
-## Input Protocol 
-Server listens for incoming messages from clients 
+## Sidepit Client
+Client are users/traders sending orders to Sidepit 
 
-Server - NNG Pull from multiple client 
+### Client Protocol 
+Client sends messages using NNG `push` of the [Pipeline Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pipeline.html). 
 
-### Clients 
-Clients are public users sending signed messages contain orders into sidepit 
+### Client API 
+client port# - 12121
 
-Clients send messages using NNG Push 
+[Protobuf messages](https://github.com/sidepit/Public-API/blob/main/spapi.proto)
 
-## Output Protocol 
-Server echos incoming messages to outbound `auction` clients 
+Clients send signed [Transaction messages](https://github.com/sidepit/Public-API/blob/a3bf70c99cbccb7042641d8adcada95ee6834765/spapi.proto#L3) 
 
-Included in these messages are special `epoch` messages on 1 second intervals 
-
-## API
-https://github.com/sidepit/Public-API/blob/main/spapi.proto 
-
-### Incoming orders 
-new order from user:
+`Transaction`
 ```
+version 
 timestamp (nano seconds) 
+oneof - New, Cancel, Auction
+id - ordinals address / pubkey
+signature - signed ecdsa (bitcoin curve) 
+```
+
+Each Transaction can be `oneof` 
+```
+NewOrder
+cancel_orderid
+AuctionBid
+```
+
+`NewOrder`
+```
 side
 price 
 symbol
 user_ref
 ``` 
-cancel order from user: 
+
+`cancel_orderid`
 ```
-timestamp
 orderid ( nanoseconds since contract start )
 ```
-auction bid from user: 
+
+`AuctionBid` 
 ```
 epoch
 hash
-nonce 
-bid ( sats )
-```
-all messages signed
-```
-public_key
-sig
+ordering_salt  
+bid ( in satoshis )
 ```
 
-### Outgoing Messages  
-Out to auction servers - broadcast 
-user messages: 
-```
-epoch 
-user tx
-seq# 
-```
-Server messages: 
-[end of epoch]
-
-```
-epoch+1
-hash of block ( proof of history)
-epoch start seq#
-epoch end seq# 
-seq# 
-```
-
-### Other services  
-[rep/req service]
-```
-req - seq# 
-rep - tx 
-```
+Protobuf Definitions: https://github.com/sidepit/Public-API/blob/main/spapi.proto 
 
 ## OrderId 
 ```
 OrderId - microseconds since open 
 Global Unique orderID = traderID + nanoseconds epoch since contract start
 ```
+
+## Sidepit FEED 
+
+
+## Resources:
+[NNG Docs](https://nng.nanomsg.org/man/tip/index.html)
+
+[NNG NodeJS](https://github.com/reqshark/nodenng)
+
+[NNG Python](codypiersall/pynng) 
+
+[NNG manual](https://drive.google.com/file/d/1Wl_vcx86VnvClSC9pYytj9FVcveXjrjW/view?usp=sharing)
