@@ -12,7 +12,13 @@ client port# - 12121
 
 [Protobuf messages](https://github.com/sidepit/Public-API/blob/main/spapi.proto)
 
-Clients send signed `Transaction` messages
+Clients sends signed `Transaction` messages
+
+1. Opening a `push` socket 
+1. Dialing `tcp://feed.sidepit.com:12122`
+1. Serializing into protobuf
+1. Sending message 
+
 
 `Transaction`
 ```
