@@ -53,14 +53,60 @@ bid ( in satoshis )
 
 Protobuf Definitions: https://github.com/sidepit/Public-API/blob/main/spapi.proto 
 
-## OrderId 
+### OrderId 
 ```
 OrderId - microseconds since open 
 Global Unique orderID = traderID + nanoseconds epoch since contract start
 ```
 
-## Sidepit FEED 
+## Sidepit FEED Protocol 
+Receiving MarketData from server using NNG `sub` of the [Pub/Sub Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pubsub.html). 
 
+### FEED API 
+feed port# - 12122
+
+[Protobuf messages](https://github.com/sidepit/Public-API/blob/main/ogcex.proto)
+
+Feed Client subscribes by:
+1. Opening as a `sub` socket - (with topic 0)
+1. Dialing `tcp://feed.sidepit.com:12122`
+1. Receiving messages 
+1. Desterilizing into Protobuf
+
+
+FEED Clients receive  `MarketData` protobuf messages
+
+`MarketData`
+```
+version 
+epoch
+EpochBar
+MarketQuote  
+```
+
+`EpochBar`
+```
+symbol
+epoch
+open
+high
+low
+close 
+volume
+``` 
+
+`MarketQuote`
+```
+bidsize
+bid
+ask
+asksize
+last
+lastsize
+upordown
+symbol
+epoch
+```
 
 ## Resources:
 [NNG Docs](https://nng.nanomsg.org/man/tip/index.html)
