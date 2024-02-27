@@ -12,7 +12,7 @@ client port# - 12121
 
 [Protobuf messages](https://github.com/sidepit/Public-API/blob/main/spapi.proto)
 
-Clients send signed [Transaction messages](https://github.com/sidepit/Public-API/blob/a3bf70c99cbccb7042641d8adcada95ee6834765/spapi.proto#L3) 
+Clients send signed `Transaction` messages
 
 `Transaction`
 ```
