@@ -1,11 +1,9 @@
 import asyncio
 import websockets
-from echo_client import EchoClient
+from echo_ws_client import EchoClient
 from constants import PROTOCOL, ADDRESS, ECHO_PORT, WS_ECHO_PORT
 
 clients = set()
-
-
 async def ws_handler(websocket, path):
     clients.add(websocket)
     try:
@@ -22,7 +20,6 @@ async def main():
 
     print("Subscribing to feed and starting WebSocket server...")
     await asyncio.gather(echo_client.receive_messages(), start_server)
-
 
 if __name__ == "__main__":
     asyncio.run(main())

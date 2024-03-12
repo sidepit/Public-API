@@ -1,7 +1,8 @@
 PROTOCOL = "tcp://"
 ADDRESS = "api.sidepit.com" # "localhost"
+CLIENT_PORT = "12121"
 FEED_PORT = "12122"
 ECHO_PORT = "12123"
-WS_PORT = "13122"
+WS_FEED_PORT = "13122"
 WS_ECHO_PORT = "13123"
 
