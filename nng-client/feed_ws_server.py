@@ -1,7 +1,7 @@
 import asyncio
 import websockets
-from feed_client import FeedClient
-from constants import PROTOCOL, ADDRESS, FEED_PORT, WS_PORT
+from feed_nng_client import FeedClient
+from constants import PROTOCOL, ADDRESS, FEED_PORT, WS_FEED_PORT
 
 clients = set()
 

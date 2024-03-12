@@ -31,14 +31,8 @@ from datetime import datetime
 from typing import Union
 
 import pynng
-from protobuf import spapi_pb2
-
-# Define the server address and port
-PROTOCOL = "tcp://"
-ADDRESS = "127.0.0.1"
-FEED_PORT = "12122"
-CLIENT_PORT = "12121"
-
+from proto import spapi_pb2
+from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
     def __init__(self, server_address: str) -> None:
