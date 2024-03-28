@@ -65,7 +65,7 @@ OrderId - microseconds since open
 Global Unique orderID = traderID + nanoseconds epoch since contract start
 ```
 
-## Sidepit FEED Protocol 
+## Sidepit PRICE-FEED Protocol 
 Receiving MarketData from server using NNG `sub` of the [Pub/Sub Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pubsub.html). 
 
 ### FEED API 
@@ -79,49 +79,50 @@ Feed Client subscribes by:
 1. Receiving messages 
 1. Desterilizing into Protobuf
 
+## Sidepit ORDER-FEED Protocol 
+Receiving MarketData from server using NNG `sub` of the [Pub/Sub Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pubsub.html). 
 
-FEED Clients receive  `MarketData` protobuf messages
+### ORDER FEED API 
+order feed port# - 12124
 
-`MarketData`
+[Protobuf messages](https://github.com/sidepit/Public-API/blob/main/nng-client/proto/ogcex.proto)
+
+Feed Client subscribes by:
+1. Opening as a `sub` socket - (with topic 0)
+2. future topics will contain `traderid` 
+1. Dialing `tcp://api.sidepit.com:12124`
+1. Receiving messages 
+1. Desterilizing into Protobuf
+
+ORDER FEED Clients receive  `OrderData` protobuf messages
+
+`OrderData`
 ```
 version 
-epoch
-EpochBar
-MarketQuote
-DepthItem (x10)  
+epoch (nano seconds) 
+BookOrder [0+]
+FillData [0+]
 ```
 
-`EpochBar`
+`BookOrder`
 ```
+price 
+open_qty
+filled_qty
+remaining_qty
+canceled_qty
 symbol
-epoch
-open
-high
-low
-close 
-volume
-``` 
-
-`MarketQuote`
-```
-bidsize
-bid
-ask
-asksize
-last
-lastsize
-upordown
-symbol
-epoch
+update_time
+orderid
+traderid  
 ```
 
-`DepthItem`
+`FillData`
 ```
-level
-b
-a
-bs
-as
+agressiveid
+passiveid
+price
+qty
 ```
 
 ## Sidepit ECHO Protocol 
