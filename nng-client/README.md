@@ -65,19 +65,63 @@ OrderId - microseconds since open
 Global Unique orderID = traderID + nanoseconds epoch since contract start
 ```
 
-## Sidepit PRICE-FEED Protocol 
+## Sidepit PRICE FEED Protocol 
 Receiving MarketData from server using NNG `sub` of the [Pub/Sub Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pubsub.html). 
 
-### FEED API 
-feed port# - 12122
+### PRICE FEED API 
+price feed port# - 12122
 
 [Protobuf messages](https://github.com/sidepit/Public-API/blob/main/nng-client/proto/ogcex.proto)
 
-Feed Client subscribes by:
+Price Feed Client subscribes by:
 1. Opening as a `sub` socket - (with topic 0)
 1. Dialing `tcp://api.sidepit.com:12122`
 1. Receiving messages 
 1. Desterilizing into Protobuf
+
+PRICE FEED Clients receive  `MarketData` protobuf messages
+
+`MarketData`
+```
+version 
+epoch
+EpochBar
+MarketQuote
+DepthItem (x10)  
+```
+
+`EpochBar`
+```
+symbol
+epoch
+open
+high
+low
+close 
+volume
+``` 
+
+`MarketQuote`
+```
+bidsize
+bid
+ask
+asksize
+last
+lastsize
+upordown
+symbol
+epoch
+```
+
+`DepthItem`
+```
+level
+b
+a
+bs
+as
+```
 
 ## Sidepit ORDER-FEED Protocol 
 Receiving MarketData from server using NNG `sub` of the [Pub/Sub Scalability Protocol](https://nanomsg.org/gettingstarted/nng/pubsub.html). 
@@ -87,7 +131,7 @@ order feed port# - 12124
 
 [Protobuf messages](https://github.com/sidepit/Public-API/blob/main/nng-client/proto/ogcex.proto)
 
-Feed Client subscribes by:
+Order Feed Client subscribes by:
 1. Opening as a `sub` socket - (with topic 0)
 2. future topics will contain `traderid` 
 1. Dialing `tcp://api.sidepit.com:12124`
