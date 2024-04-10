@@ -150,11 +150,16 @@ FillData [0+]
 
 `BookOrder`
 ```
+side 
 price 
 open_qty
 filled_qty
 remaining_qty
 canceled_qty
+agres_fill_qty
+agres_avg_price
+pass_fill_qty
+avg_price
 symbol
 update_time
 orderid
@@ -167,6 +172,7 @@ agressiveid
 passiveid
 price
 qty
+agressive_side // -1 for agressive sell, 1 for buy 
 ```
 
 ## Sidepit ECHO Protocol 
@@ -240,6 +246,78 @@ hash
 ordering_salt  
 bid ( in satoshis )
 ```
+## Sidepit POSITION Protocol 
+Receiving positions and order status per `traderid` from server using NNG `REQ` of the [Request/Reply (I ask, you answer), Scalability Protocol](https://nanomsg.org/gettingstarted/nng/reqrep.html). 
+
+### POS API 
+pos port# - 12125
+
+[Protobuf messages](https://github.com/sidepit/Public-API-Data/blob/main/ogcex.proto)
+
+POS Client sends Request and receives Reply  
+1. Opening as a `req` socket 
+1. Dialing `tcp://api.sidepit.com:12125`
+1. Serialize request into Protobuf 
+1. Send Request message
+1. Receive Reply message  
+1. Desterilizing reply into Protobuf
+
+Request: POS Clients sends `RequestPositions` protobuf messages
+
+`RequestPositions`
+```
+traderid 
+symbol 
+```
+
+Reply: POS Clients receive `TraderPositionOrders` protobuf messages
+
+`TraderPositionOrders` 
+```
+traderid 
+symbol 
+Position 
+map<string, OrderFills> // OrderFills keyed on `orderid` 
+```
+
+`Position`
+```
+position // -1 for short 1, 1 for long 1
+avg_price 
+```
+
+`OrderFills`
+```
+BookOrder 
+FillData [0+]
+```
+
+`BookOrder`
+```
+side 
+price 
+open_qty
+filled_qty
+remaining_qty
+canceled_qty
+agres_fill_qty
+agres_avg_price
+pass_fill_qty
+avg_price
+symbol
+update_time
+orderid
+traderid  
+```
+
+`FillData`
+```
+agressiveid
+passiveid
+price
+qty
+agressive_side // -1 for agressive sell, 1 for buy 
+``` 
 
 ## Resources:
 [NNG Docs](https://nng.nanomsg.org/man/tip/index.html)
