@@ -9,7 +9,7 @@ message Transaction {
         string cancel_orderid = 30;
         AuctionBid auction_bid = 40;
     }
-    bytes id = 100;
+    string id = 100;
     bytes signature = 110;   
 }
 
@@ -31,7 +31,7 @@ message AuctionBid {
 message EpochEvent {
     uint64 epoch = 10;
     string hash = 20;
-    bytes id = 100;
+    string id = 100;
     bytes signature = 110; 
 }
 
