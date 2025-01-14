@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import Union
 
 import pynng
-from proto import spapi_pb2
+import proto.spapi_pb2 as spapi_pb2
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
