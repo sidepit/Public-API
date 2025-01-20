@@ -25,28 +25,32 @@ def main() -> None:
     server_address = f"{PROTOCOL}{ADDRESS}:{CLIENT_PORT}"
     client = SidepitClient(server_address)
 
+    print(f"Connected to server at {server_address}")
+
     # Example usage
     client.send_new_order(
-        side=True,
-        size=10,
-        price=100,
-        symbol="BTCUSD",
-        user_id=b"user_id",
-        user_signature=b"user_signature",
+        side=1,
+        size=1,
+        price=1000,
+        symbol="USDBTCH25",
+        user_id=sidepit_id,
+        wif=secret_key,
     )
     client.send_cancel_order(
         order_id=b"order_id",
         user_id=b"user_id",
-        user_signature=b"user_signature",
+        wif=secret_key,
     )
-    client.send_auction_bid(
-        epoch=1234567890,
-        hash_value="hash_value",
-        ordering_salt="ordering_salt_value",
-        bid=500,
-        user_id=b"user_id",
-        user_signature=b"user_signature",
-    )
+    # client.send_auction_bid(
+    #     epoch=1234567890,
+    #     hash_value="hash_value",
+    #     ordering_salt="ordering_salt_value",
+    #     bid=500,
+    #     user_id=b"user_id",
+    #     user_signature=b"user_signature",
+    # )
+
+    print("Sent new order")
 
     client.close_connection()
 

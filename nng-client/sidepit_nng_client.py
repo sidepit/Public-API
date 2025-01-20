@@ -29,9 +29,14 @@ Usage:
 import time
 from datetime import datetime
 from typing import Union
-
+from hashlib import sha256
 import pynng
+import hashlib
+import base58
+from secp256k1 import PrivateKey
+# from proto import spapi_pb2
 import proto.spapi_pb2 as spapi_pb2
+# Ensure that spapi_pb2.py is generated from the .proto file and contains the Transaction class
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
@@ -43,12 +48,33 @@ class SidepitClient:
             server_address (str): The address of the server to connect to.
         """
         self.server_address = server_address
-        self.socket = pynng.Pair0()
+        self.socket = pynng.Push0()
         self.socket.dial(self.server_address)
 
-    def create_transaction_message(
-        self, user_id: bytes, user_signature: bytes
-    ) -> spapi_pb2.Transaction:
+    # def create_transaction_message(
+    #     self, user_id: bytes, user_signature: bytes
+    # ) -> spapi_pb2.Transaction:
+    #     """
+    #     Create a new Transaction message.
+
+    #     Args:
+    #         user_id (bytes): The ID of the user.
+    #         user_signature (bytes): The signature of the user.
+
+    #     Returns:
+    #         spapi_pb2.Transaction: The created Transaction message.
+    #     """
+    #     transaction_msg = spapi_pb2.Transaction()
+    #     transaction_msg.version = 1
+    #     transaction_msg.timestamp = int(time.time() * 1e9)  # Nano seconds
+    #     transaction_msg.id = user_id  # User ID bytes
+    #     transaction_msg.signature = user_signature  # User signature bytes
+    #     return transaction_msg
+    
+
+
+
+    def create_transaction_message(self,user_id: bytes) -> spapi_pb2.SignedTransaction:
         """
         Create a new Transaction message.
 
@@ -57,23 +83,69 @@ class SidepitClient:
             user_signature (bytes): The signature of the user.
 
         Returns:
-            spapi_pb2.Transaction: The created Transaction message.
+            sidepit_api_pb2.Transaction: The created Transaction message.
         """
-        transaction_msg = spapi_pb2.Transaction()
+        signedTransaction = spapi_pb2.SignedTransaction()
+        transaction_msg = signedTransaction.transaction  
         transaction_msg.version = 1
-        transaction_msg.timestamp = int(time.time() * 1e9)  # Nano seconds
-        transaction_msg.id = user_id  # User ID bytes
-        transaction_msg.signature = user_signature  # User signature bytes
-        return transaction_msg
+        transaction_msg.timestamp = int(time.time() * 1e9)   
+        transaction_msg.sidepit_id = user_id 
 
-    def send_message(self, message: Union[spapi_pb2.Transaction, bytes]) -> None:
+        return signedTransaction
+    
+
+    def sign_it(self, digest, wif):
+        priv = PrivateKey(self.wif_to_private_key(wif), False)
+        sig = priv.ecdsa_sign(digest,True)
+        return priv.ecdsa_serialize_compact(sig).hex()
+
+
+    def sign_digest(self, tx, wif):
+        digest = sha256(tx.SerializeToString()).digest() 
+        hexsig = self.sign_it(digest, wif); 
+        return hexsig
+
+
+    def wif_to_private_key(self, wif):
+        # Step 1: Decode the WIF string from Base58
+        decoded = base58.b58decode(wif)
+        
+        # Step 2: Separate the components
+        # - First byte is the version byte
+        # - Last 4 bytes are the checksum
+        # - The remaining bytes are the private key (and possibly a compression flag)
+        checksum = decoded[-4:]
+        key_with_optional_compression = decoded[1:-4]
+        
+        # Step 3: Calculate checksum of the decoded key and compare to the last 4 bytes
+        hash1 = hashlib.sha256(decoded[:-4]).digest()
+        hash2 = hashlib.sha256(hash1).digest()
+        if hash2[:4] != checksum:
+            raise ValueError("Invalid WIF checksum")
+        
+        # Step 4: Determine if the private key is compressed by checking the last byte
+        if key_with_optional_compression[-1] == 0x01:
+            # Remove the compression byte to get the raw private key
+            private_key = key_with_optional_compression[:-1]
+            compressed = True
+        else:
+            private_key = key_with_optional_compression
+            compressed = False
+        
+        # Step 5: Convert the private key to hexadecimal format
+        private_key_hex = private_key.hex()
+        
+        return private_key_hex
+
+
+    def send_message(self, message: Union[spapi_pb2.SignedTransaction, bytes]) -> None:
         """
         Send a message over the socket.
 
         Args:
-            message (Union[spapi_pb2.Transaction, bytes]): The message to send.
+            message (Union[sidepit_api_pb2.Transaction, bytes]): The message to send.
         """
-        if isinstance(message, spapi_pb2.Transaction):
+        if isinstance(message, spapi_pb2.SignedTransaction):
             serialized_msg = message.SerializeToString()
         elif isinstance(message, bytes):
             serialized_msg = message
@@ -84,12 +156,12 @@ class SidepitClient:
 
     def send_new_order(
         self,
-        side: bool,
+        side: int,
         size: int,
         price: int,
         symbol: str,
-        user_id: bytes,
-        user_signature: bytes,
+        user_id,
+        wif,
     ) -> None:
         """
         Send a new order message.
@@ -102,17 +174,18 @@ class SidepitClient:
             user_id (bytes): The ID of the user.
             user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
-        new_order = transaction_msg.new_order
+        stx = self.create_transaction_message(user_id)
+        new_order = stx.transaction.new_order
         new_order.side = side
         new_order.size = size
         new_order.price = price
-        new_order.symbol = symbol
-        self.send_message(transaction_msg)
+        new_order.ticker = symbol
+
+        stx.signature = self.sign_digest(stx.transaction,wif)
+        self.send_message(stx)
 
     def send_cancel_order(
-        self, order_id: bytes, user_id: bytes, user_signature: bytes
-    ) -> None:
+        self, order_id: bytes, user_id, wif) -> None:
         """
         Send a cancel order message.
 
@@ -121,9 +194,47 @@ class SidepitClient:
             user_id (bytes): The ID of the user.
             user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
-        transaction_msg.cancel_orderid = order_id
-        self.send_message(transaction_msg)
+
+        stx = self.create_transaction_message(user_id)
+        stx.transaction.cancel_orderid = order_id
+        stx.signature = self.sign_digest(stx.transaction,wif)
+        self.send_message(stx)
+        return  stx.transaction.sidepit_id + ":" + str(stx.transaction.timestamp)
+
+    # def send_auction_bid(
+    #     self,
+    #     epoch: int,
+    #     hash_value: str,
+    #     ordering_salt: str,
+    #     bid: int,
+    #     user_id: bytes,
+    #     user_signature: bytes,
+    # ) -> None:
+    #     """
+    #     Send an auction bid message.
+
+    #     Args:
+    #         epoch (int): The epoch time of the bid.
+    #         hash_value (str): The hash value.
+    #         ordering_salt (str): The ordering salt.
+    #         bid (int): The bid value in satoshis.
+    #         user_id (bytes): The ID of the user.
+    #         user_signature (bytes): The signature of the user.
+    #     """
+    #     transaction_msg = self.create_transaction_message(user_id, user_signature)
+    #     auction_bid = transaction_msg.auction_bid
+    #     auction_bid.epoch = epoch
+    #     auction_bid.hash = hash_value
+    #     auction_bid.ordering_salt = ordering_salt
+    #     auction_bid.bid = bid
+    #     self.send_message(transaction_msg)
+
+    def close_connection(self) -> None:
+        """
+        Close the connection to the server.
+        """
+        self.socket.close()
+
 
     def send_auction_bid(
         self,
@@ -132,7 +243,7 @@ class SidepitClient:
         ordering_salt: str,
         bid: int,
         user_id: bytes,
-        user_signature: bytes,
+        wif
     ) -> None:
         """
         Send an auction bid message.
@@ -145,50 +256,14 @@ class SidepitClient:
             user_id (bytes): The ID of the user.
             user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
-        auction_bid = transaction_msg.auction_bid
+
+        stx = self.create_transaction_message(user_id)
+        auction_bid = stx.transaction.auction_bid
         auction_bid.epoch = epoch
         auction_bid.hash = hash_value
         auction_bid.ordering_salt = ordering_salt
         auction_bid.bid = bid
-        self.send_message(transaction_msg)
 
-    def close_connection(self) -> None:
-        """
-        Close the connection to the server.
-        """
-        self.socket.close()
-
-
-def main() -> None:
-    server_address = f"{PROTOCOL}{ADDRESS}:{CLIENT_PORT}"
-    client = SidepitClient(server_address)
-
-    # Example usage
-    client.send_new_order(
-        side=True,
-        size=10,
-        price=100,
-        symbol="BTCUSD",
-        user_id=b"user_id",
-        user_signature=b"user_signature",
-    )
-    client.send_cancel_order(
-        order_id=b"order_id",
-        user_id=b"user_id",
-        user_signature=b"user_signature",
-    )
-    client.send_auction_bid(
-        epoch=1234567890,
-        hash_value="hash_value",
-        ordering_salt="ordering_salt_value",
-        bid=500,
-        user_id=b"user_id",
-        user_signature=b"user_signature",
-    )
-
-    client.close_connection()
-
-
-if __name__ == "__main__":
-    main()
+        stx.signature = self.sign_digest(stx.transaction,wif)
+        self.send_message(stx)
+        return  stx.transaction.sidepit_id + ":" + str(stx.transaction.timestamp)
