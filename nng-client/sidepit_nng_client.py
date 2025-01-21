@@ -184,6 +184,8 @@ class SidepitClient:
         stx.signature = self.sign_digest(stx.transaction,wif)
         self.send_message(stx)
 
+        return  stx.transaction.sidepit_id + ":" + str( stx.transaction.timestamp)
+
     def send_cancel_order(
         self, order_id: bytes, user_id, wif) -> None:
         """
