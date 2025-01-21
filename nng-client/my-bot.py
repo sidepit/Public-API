@@ -52,7 +52,7 @@ def main() -> None:
     #     ordering_salt="ordering_salt_value",
     #     bid=500,
     #     user_id=b"user_id",
-    #     user_signature=b"user_signature",
+    #     wif=secret_key,
     # )
 
     print("Sent new order")
