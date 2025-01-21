@@ -5,5 +5,5 @@
 - [Public API Data](https://github.com/sidepit/Public-API-Data/blob/main/README.md)
 
 - [NNG](education/nng/README.md)
-- [Proto](education/README_PROTO.md)
+- [Protobuf](education/nng/README.md)
 - [Cryptography](education/README_CRYPTOGRAPHY.md)
