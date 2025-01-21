@@ -1,4 +1,6 @@
-# Python Client
+![Bitcoin Image](images/bitcoin.jpg)
+
+# Sidepit Python Client
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
