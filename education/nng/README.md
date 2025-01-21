@@ -4,29 +4,28 @@
 
 ## Getting Started
 
-### 1. Clone the Repository and Navigate into It
+### 1. Navigate to education/nng
 
 ```sh
-git clone https://github.com/sidepit/101--nng.git
-cd 101--nng
+cd education/nng
 ```
 
 ### 2. Create a Virtual Environment
 
 ```sh
-python -m venv .yourenv
+python -m venv .env
 ```
 
 ### 3. Activate the Virtual Environment
 
 **Windows:**
 ```sh
-.yourenv\Scripts\activate
+.env\Scripts\activate
 ```
 
 **Mac/Linux:**
 ```sh
-source .yourenv/bin/activate
+source .env/bin/activate
 ```
 
 ### 4. Install pynng
