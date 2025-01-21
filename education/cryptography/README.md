@@ -26,29 +26,28 @@ but only the person with the **private key** can unlock it and read what's insid
 
 ## Getting Started
 
-### 1. Clone the Repository and Navigate into It
+### 1. Navigate to `education/cryptography`
 
 ```sh
-git clone https://github.com/sidepit/101--cryptography.git
-cd 101--cryptography
+cd education/cryptography
 ```
 
 ### 2. Create a Virtual Environment
 
 ```sh
-python -m venv .yourenv
+python -m venv .env
 ```
 
 ### 3. Activate the Virtual Environment
 
 **Windows:**
 ```sh
-.yourenv\Scripts\activate
+.env\Scripts\activate
 ```
 
 **Mac/Linux:**
 ```sh
-source .yourenv/bin/activate
+source .env/bin/activate
 ```
 
 ### 4. Install Necessary Packages 
