@@ -6,4 +6,4 @@
 
 - [NNG](education/nng/README.md)
 - [Protobuf](education/protobuf/README.md)
-- [Cryptography](education/README_CRYPTOGRAPHY.md)
+- [Cryptography](education/cryptography/README.md)
