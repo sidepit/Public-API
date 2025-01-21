@@ -51,28 +51,6 @@ class SidepitClient:
         self.socket = pynng.Push0()
         self.socket.dial(self.server_address)
 
-    # def create_transaction_message(
-    #     self, user_id: bytes, user_signature: bytes
-    # ) -> spapi_pb2.Transaction:
-    #     """
-    #     Create a new Transaction message.
-
-    #     Args:
-    #         user_id (bytes): The ID of the user.
-    #         user_signature (bytes): The signature of the user.
-
-    #     Returns:
-    #         spapi_pb2.Transaction: The created Transaction message.
-    #     """
-    #     transaction_msg = spapi_pb2.Transaction()
-    #     transaction_msg.version = 1
-    #     transaction_msg.timestamp = int(time.time() * 1e9)  # Nano seconds
-    #     transaction_msg.id = user_id  # User ID bytes
-    #     transaction_msg.signature = user_signature  # User signature bytes
-    #     return transaction_msg
-    
-
-
 
     def create_transaction_message(self,user_id: bytes) -> spapi_pb2.SignedTransaction:
         """
@@ -127,10 +105,8 @@ class SidepitClient:
         if key_with_optional_compression[-1] == 0x01:
             # Remove the compression byte to get the raw private key
             private_key = key_with_optional_compression[:-1]
-            compressed = True
         else:
             private_key = key_with_optional_compression
-            compressed = False
         
         # Step 5: Convert the private key to hexadecimal format
         private_key_hex = private_key.hex()
@@ -202,34 +178,6 @@ class SidepitClient:
         stx.signature = self.sign_digest(stx.transaction,wif)
         self.send_message(stx)
         return  stx.transaction.sidepit_id + ":" + str(stx.transaction.timestamp)
-
-    # def send_auction_bid(
-    #     self,
-    #     epoch: int,
-    #     hash_value: str,
-    #     ordering_salt: str,
-    #     bid: int,
-    #     user_id: bytes,
-    #     user_signature: bytes,
-    # ) -> None:
-    #     """
-    #     Send an auction bid message.
-
-    #     Args:
-    #         epoch (int): The epoch time of the bid.
-    #         hash_value (str): The hash value.
-    #         ordering_salt (str): The ordering salt.
-    #         bid (int): The bid value in satoshis.
-    #         user_id (bytes): The ID of the user.
-    #         user_signature (bytes): The signature of the user.
-    #     """
-    #     transaction_msg = self.create_transaction_message(user_id, user_signature)
-    #     auction_bid = transaction_msg.auction_bid
-    #     auction_bid.epoch = epoch
-    #     auction_bid.hash = hash_value
-    #     auction_bid.ordering_salt = ordering_salt
-    #     auction_bid.bid = bid
-    #     self.send_message(transaction_msg)
 
     def close_connection(self) -> None:
         """
