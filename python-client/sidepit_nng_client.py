@@ -43,7 +43,7 @@ class SidepitClient:
             server_address (str): The address of the server to connect to.
         """
         self.server_address = server_address
-        self.socket = pynng.Pair0()
+        self.socket = pynng.Push0()
         self.socket.dial(self.server_address)
 
     def create_transaction_message(
@@ -84,7 +84,7 @@ class SidepitClient:
 
     def send_new_order(
         self,
-        side: bool,
+        side: int,
         size: int,
         price: int,
         symbol: str,
@@ -166,7 +166,7 @@ def main() -> None:
 
     # Example usage
     client.send_new_order(
-        side=True,
+        side=1,
         size=10,
         price=100,
         symbol="BTCUSD",
