@@ -2,43 +2,307 @@ syntax = "proto3";
 
 // input 
 message Transaction {
-    int32 version = 1;
+    int32 version = 1;                  
     uint64 timestamp = 10; 
     oneof tx {
-        NewOrder new_order = 20;
-        string cancel_orderid = 30;
-        AuctionBid auction_bid = 40;
+        NewOrder        new_order = 20;
+        string          cancel_orderid = 30;
+        AuctionBid      auction_bid = 40;
+        UnlockRequest   unlock_req = 50;
     }
-    string id = 100;
-    bytes signature = 110;   
+    string sidepit_id = 101;
+}
+
+message SignedTransaction {
+    int32       signature_version = 2;   // 0 for raw, 2 for "magic bitcoin recoverable"
+    Transaction transaction       = 11;  // the transaction 
+    string      tx_digest         = 21;  // optional - transaction digest that was signed 
+    string      pubkey            = 31;  // optional - pubkey of sidepit_id
+    string      signature         = 111; // required - 64 hex encoded or 65 byte recoverable base64 encoded 
 }
 
 message NewOrder {
-    bool side = 10;
-    int32 size = 20;
-    int32 price = 30;
-    string symbol = 40;
+    sint32      side   = 11; // 1 for buy - -1 for sell 
+    int32       size   = 20; // quantity - always positive 
+    int32       price  = 30; 
+    string      ticker = 40;
 }
 
 message AuctionBid {
-    uint64 epoch = 10;
-    string hash = 20;
-    string ordering_salt = 30;
-    int32 bid = 40;  // in satoshis 
+    uint64      epoch = 10;
+    string      hash = 20;
+    string      ordering_salt = 30;
+    int32       bid = 40;  // in satoshis 
 }
 
-// output 
+message UnlockRequest {
+    UnlockRequestAmount minmax = 20;     
+    uint64 explicit_amount = 30; 
+}
+
+// output
 message EpochEvent {
-    uint64 epoch = 10;
-    string hash = 20;
-    string id = 100;
-    bytes signature = 110; 
+    uint64      epoch = 10;
+    string      hash = 20;
+    string      id = 100;
+    bytes       signature = 110; 
+}
+
+message ExchangeEvent {
+    ExchangeState state = 10;
 }
 
 message TxBlockStream { 
-    uint64 epoch = 10;
+    uint64                     epoch = 10;
+    ExchangeState              estate = 20; 
+
     oneof txepoch {
-        EpochEvent epoch_event = 20;
-        Transaction tx = 30;
+        EpochEvent            epoch_event = 25;
+        SignedTransaction     stx = 31;
+        ExchangeEvent         exchange_event = 40;
     }
+}
+
+message MarketQuote {
+    int32       bidsize = 10;
+    int32       bid = 20;
+    int32       ask = 30;
+    int32       asksize = 40;
+    int32       last = 50;
+    int32       lastsize = 60;
+    bool        upordown = 70;
+    string      ticker = 80;
+    uint64      epoch = 90;
+}
+
+message EpochBar {
+    string          ticker = 10;
+    uint64          epoch = 15;
+    int32           open = 20;
+    int32           high = 30;
+    int32           low = 40;
+    int32           close = 50;
+    int32           volume = 60;
+}
+
+message ContractBar {
+    string          ticker = 10;
+    uint64          epoch = 15;
+    int32           day_open = 20;
+    int32           day_high = 30;
+    int32           day_low = 40;
+    int32           day_close = 50;
+    int32           day_volume = 60;
+    int32           high = 70;
+    int32           low = 80;
+    int32           volume = 90;
+    int32           open_interest = 100;
+    int32           previous_close = 110;
+}
+
+message BookOrder {
+    sint32      side = 10; // 1 for buy - -1 for sell 
+    int32       price = 20;
+    int32       open_qty = 30;
+    int32       filled_qty = 40;
+    int32       remaining_qty = 50;
+    int32       canceled_qty = 60;
+    int32       agres_fill_qty = 62;
+    float       agres_avg_price = 63;
+    int32       pass_fill_qty = 64;
+    float       avg_price = 65;
+    string      ticker = 70;
+    string      update_time = 80;   
+    string      orderid = 90;       // "sidepit_id" + ":" + Transaction.timestamp 
+    string      traderid = 100;     // sidepit_id 
+}
+
+message DepthItem {
+    int32       level = 10;
+    int32       b = 30;
+    int32       a = 40;
+    int32       bs = 50;
+    int32       as = 60;
+}
+
+message MarketData {
+    int32       version = 1;
+    uint64      epoch = 10;
+    EpochBar    bar = 20;
+    MarketQuote quote = 30;
+    repeated    DepthItem depth = 40;
+}
+
+message FillData {
+    string      agressiveid = 10;
+    string      passiveid = 20;
+    uint32      price = 30;
+    uint32      qty = 40;
+    int32       agressive_side = 50;
+    uint64      microtime = 60; // epoch in microseconds 
+}
+
+message OrderData {
+    int32       version = 1;
+    uint64      epoch = 10;
+    repeated    BookOrder bookorders = 40;
+    repeated    FillData fills = 50;
+}
+
+// Product Specifications
+message Contract {
+    string      symbol = 10;
+    uint32      unit_size = 20;
+    string      unit = 30;  // e.g. "USD"
+    string      price_quote = 40; //  e.g. "SAT"
+    int32       price_quote_units = 50; 
+    uint32      tic_min = 60; 
+    uint32      tic_value = 70; 
+    int32       price_limit_percent = 80; 
+    uint64      initial_margin = 90; 
+    uint64      maint_margin = 100; 
+    int32       position_limits = 110;
+    uint64      trading_open_time = 120; 
+    uint64      trading_close_time = 130; 
+}
+
+message Product { 
+    string      ticker = 10;
+    string      contract_symbol = 20;
+    uint64      expiration_date = 30; 
+    uint64      start_trading_date = 40; 
+    bool        is_active = 50;
+}
+
+message Schedule { 
+    uint64      date = 10;
+    uint64      trading_open_time = 20; 
+    uint64      trading_close_time = 30;
+    repeated string product = 40;
+}
+
+// Exchange Trading Information 
+message TradingSession {
+    string      session_id = 10;
+    Schedule    schedule = 20;
+    string      prev_session_id = 50;
+}
+
+message SessionStatus { 
+    ExchangeState    estate = 10;
+    string           session_id = 20;
+}
+
+message ExchangeStatus {
+    TradingSession  session = 10;
+    SessionStatus   status = 20;
+}
+
+message ActiveContractProduct {
+    Contract        contract = 10;
+    Product         product = 20; 
+    Schedule        schedule = 30; 
+}
+
+// per user section 
+message Position { 
+    sint32          position = 10; 
+    float           avg_price = 21;
+}
+
+message OrderFills {
+    BookOrder       order = 10;
+    repeated        FillData fills = 50;
+}
+
+message AccountState { 
+    string          sidepit_id = 10;
+    string          pubkey = 20;
+    int64           net_locked = 30;
+    int64           pending_unlock = 40;
+    int64           realized_pnl = 50;
+    int64           unrealized_pnl = 60;  
+    // int64   initial_margin = 70;
+    int64           margin_required = 80;
+    int64           available_balance = 90;
+    int64           available_margin = 100;
+    bool            is_restricted = 110; 
+    int32           reduce_only = 112; 
+    map<string, Position>   positions = 120;
+    sint32          carried_position = 130;
+    sint32          new_position = 140;       
+    int32           open_bids = 150;       
+    int32           open_asks = 160;
+}
+
+message BtcLocks { 
+    string          txid = 10;
+    string          pubkey = 20;
+    string          btc_address = 30;
+    uint64          lock_sats = 40;
+    uint64          unlock_sats = 50;
+    bool            is_pending = 60;
+}
+
+message RequestReply {
+    int32                   TypeMask = 1; 
+    string                  traderid = 10;
+    string                  ticker = 30; 
+}
+
+message ReplyRequest { 
+    int32                   TypeMask = 10; 
+    TraderPositionOrders    trader_positions = 20;
+    ActiveProduct           active_product = 30; 
+    MarketData              market_data = 40;
+}
+
+message TraderPositionOrders {
+    string                  traderid = 10;
+    string                  symbol = 20;
+    map<string, OrderFills> orderfills = 40;
+    AccountState            accountstate = 50;
+    repeated BtcLocks       locks = 60;
+} 
+
+message ActiveProduct { 
+    ActiveContractProduct   active_contract_product = 10;
+    ExchangeStatus          exchange_status = 20;
+    ContractBar             contractbar = 30; 
+}
+
+// @deprecated
+// message RequestPositions {
+//     string traderid = 10;
+//     string symbol = 20;
+// }
+
+/*
+    All enums must be at the bottom
+    (protoc => jsdoc converter doesn't like it)
+*/
+
+enum UnlockRequestAmount {
+    NONE_AMT = 0;
+    MAX = 1;
+    MIN = 2;
+    EXPLICIT = 3;
+}
+
+// reply/request API 
+enum ReplyRequestTypes {
+    NONE = 0;
+    ACTIVE_PRODUCT = 1;
+    POSITIONS = 2;
+    QUOTE = 4;
+}
+
+enum ExchangeState {
+    EXCHANGE_UNKNOWN = 0;
+    EXCHANGE_PENDING_OPEN = 1;
+    EXCHANGE_OPEN = 2;
+    EXCHANGE_RECOVERING = 3;
+    EXCHANGE_CLOSING = 4;
+    EXCHANGE_SETTLED = 5; 
+    EXCHANGE_CLOSED = 6;
 }
