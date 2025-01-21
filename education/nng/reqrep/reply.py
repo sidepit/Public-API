@@ -5,4 +5,4 @@ with pynng.Rep0() as rep:
     while True:
         received_message = rep.recv()
         print(received_message.decode())
-        rep.send(b"Message: Hello, world!")
+        rep.send(b"Hello, from Sidepit!")
