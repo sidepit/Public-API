@@ -70,6 +70,6 @@ sudo apt install openssl
 
 **Explore specific cryptographic technologies and methods below:**
 
-- [SSL](README_SSL.md)
-- [ECDSA](README_ECDSA.md)
-- [SECP256K1](README_SECP256K1.md)
+- [SSL](readmes/ssl.md)
+- [ECDSA](readmes/ecdsa.md)
+- [SECP256K1](readmes/secp256k1.md)
