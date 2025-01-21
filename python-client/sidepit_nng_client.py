@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import Union
 
 import pynng
-from proto import spapi_pb2
+from proto import sidepit_api_pb2
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
@@ -46,34 +46,30 @@ class SidepitClient:
         self.socket = pynng.Push0()
         self.socket.dial(self.server_address)
 
-    def create_transaction_message(
-        self, user_id: bytes, user_signature: bytes
-    ) -> spapi_pb2.Transaction:
+    def create_transaction_message(self, user_id: bytes) -> sidepit_api_pb2.Transaction:
         """
         Create a new Transaction message.
 
         Args:
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
 
         Returns:
-            spapi_pb2.Transaction: The created Transaction message.
+            sidepit_api_pb2.Transaction: The created Transaction message.
         """
-        transaction_msg = spapi_pb2.Transaction()
+        transaction_msg = sidepit_api_pb2.Transaction()
         transaction_msg.version = 1
         transaction_msg.timestamp = int(time.time() * 1e9)  # Nano seconds
-        transaction_msg.id = user_id  # User ID bytes
-        transaction_msg.signature = user_signature  # User signature bytes
+        transaction_msg.sidepit_id = user_id
         return transaction_msg
 
-    def send_message(self, message: Union[spapi_pb2.Transaction, bytes]) -> None:
+    def send_message(self, message: Union[sidepit_api_pb2.Transaction, bytes]) -> None:
         """
         Send a message over the socket.
 
         Args:
-            message (Union[spapi_pb2.Transaction, bytes]): The message to send.
+            message (Union[sidepit_api_pb2.Transaction, bytes]): The message to send.
         """
-        if isinstance(message, spapi_pb2.Transaction):
+        if isinstance(message, sidepit_api_pb2.Transaction):
             serialized_msg = message.SerializeToString()
         elif isinstance(message, bytes):
             serialized_msg = message
@@ -87,41 +83,36 @@ class SidepitClient:
         side: int,
         size: int,
         price: int,
-        symbol: str,
+        ticker: str,
         user_id: bytes,
-        user_signature: bytes,
     ) -> None:
         """
         Send a new order message.
 
         Args:
-            side (bool): The side of the order (True for buy, False for sell).
+            side (int): The side of the order (1 for buy, -1 for sell).
             size (int): The size of the order.
             price (int): The price of the order.
-            symbol (str): The symbol of the order.
+            ticker (str): The ticker of the order.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
+        transaction_msg = self.create_transaction_message(user_id)
         new_order = transaction_msg.new_order
         new_order.side = side
         new_order.size = size
         new_order.price = price
-        new_order.symbol = symbol
+        new_order.ticker = ticker
         self.send_message(transaction_msg)
 
-    def send_cancel_order(
-        self, order_id: bytes, user_id: bytes, user_signature: bytes
-    ) -> None:
+    def send_cancel_order(self, order_id: bytes, user_id: bytes) -> None:
         """
         Send a cancel order message.
 
         Args:
             order_id (bytes): The ID of the order to cancel.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
+        transaction_msg = self.create_transaction_message(user_id)
         transaction_msg.cancel_orderid = order_id
         self.send_message(transaction_msg)
 
@@ -131,8 +122,7 @@ class SidepitClient:
         hash_value: str,
         ordering_salt: str,
         bid: int,
-        user_id: bytes,
-        user_signature: bytes,
+        user_id: bytes
     ) -> None:
         """
         Send an auction bid message.
@@ -143,9 +133,8 @@ class SidepitClient:
             ordering_salt (str): The ordering salt.
             bid (int): The bid value in satoshis.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
-        transaction_msg = self.create_transaction_message(user_id, user_signature)
+        transaction_msg = self.create_transaction_message(user_id)
         auction_bid = transaction_msg.auction_bid
         auction_bid.epoch = epoch
         auction_bid.hash = hash_value
@@ -169,22 +158,19 @@ def main() -> None:
         side=1,
         size=10,
         price=100,
-        symbol="BTCUSD",
-        user_id=b"user_id",
-        user_signature=b"user_signature",
+        ticker="BTCUSD",
+        user_id=b"user_id"
     )
     client.send_cancel_order(
         order_id=b"order_id",
         user_id=b"user_id",
-        user_signature=b"user_signature",
     )
     client.send_auction_bid(
         epoch=1234567890,
         hash_value="hash_value",
         ordering_salt="ordering_salt_value",
         bid=500,
-        user_id=b"user_id",
-        user_signature=b"user_signature",
+        user_id=b"user_id"
     )
 
     client.close_connection()

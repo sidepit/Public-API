@@ -1,6 +1,6 @@
 import asyncio
 import pynng
-from proto import spapi_pb2
+from proto import sidepit_api_pb2
 from utils import broadcast
 import json
 from constants import PROTOCOL, ADDRESS, ECHO_PORT

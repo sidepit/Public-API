@@ -1,4 +1,4 @@
 # Ignore .env and pycache
-.env/
 
-__pycache__/
+**/.env
+**/__pycache__/
