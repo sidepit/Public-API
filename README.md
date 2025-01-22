@@ -13,7 +13,7 @@ We have provided everything you need to get started quickly and efficiently.
 ### Clone the Repository and Navigate into It
 
 ```sh
-git clone https://github.com/MordechaiWein/Public-API.git
+git clone https://github.com/sidepit/Public-API.git
 cd Public-API
 ```
 
