@@ -69,5 +69,6 @@ git commit -m "Describe your changes here"
 ```sh
 git push origin your-branch-name
 ```  
-**Submit a Pull Request**:  
-Go to the original repository on GitHub and click **New Pull Request**. Compare changes from your forked branch and submit the PR with a description of your changes!
+
+**Submit a Pull Request** 🚀:  
+Go to the original repository on GitHub, navigate to the **Pull requests** tab, and click **New pull request**. Compare changes from your forked branch and submit the PR with a description of your changes!
