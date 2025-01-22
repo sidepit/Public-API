@@ -10,7 +10,14 @@ We have provided everything you need to get started quickly and efficiently.
 
 ## Getting Started
 
-To begin, ensure you have the latest version of our Protocol Buffers:
+### Clone the Repository and Navigate into It
+
+```sh
+git clone https://github.com/MordechaiWein/Public-API.git
+cd Public-API
+```
+
+Next, ensure you have the latest version of our Protocol Buffers:
 
 ```sh
 git submodule update --init
