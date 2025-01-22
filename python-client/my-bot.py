@@ -31,7 +31,7 @@ def main() -> None:
     orderid=client.send_new_order(
         side=-1,
         size=1,
-        price=900,
+        price=1000,
         ticker="USDBTCH25",
         user_id=sidepit_id,
         wif=secret_key,
