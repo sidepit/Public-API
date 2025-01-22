@@ -10,7 +10,7 @@ We have provided everything you need to get started quickly and efficiently.
 
 ## Getting Started
 
-### Fork the Repository, Clone Your Fork, and Navigate into It
+### Fork the repository, clone your fork, and navigate into it
 
 1. **Fork the Repository**  
 Click the "Fork" button on the [Public API GitHub page](https://github.com/sidepit/Public-API).
