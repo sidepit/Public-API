@@ -49,13 +49,15 @@ Learn more about these technologies:
 We welcome contributions! To make a Pull Request (PR):
 
 **Create a New Branch**
+
 Create and switch to a new branch for your changes:
 
 ```sh
 git checkout -b your-branch-name
 ```
 
-**Make Changes and Commit them**  
+**Make Changes and Commit them**
+
 After making your changes run:
 
 ```sh
