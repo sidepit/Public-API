@@ -32,7 +32,7 @@ def main() -> None:
         side=-1,
         size=1,
         price=900,
-        symbol="USDBTCH25",
+        ticker="USDBTCH25",
         user_id=sidepit_id,
         wif=secret_key,
     )

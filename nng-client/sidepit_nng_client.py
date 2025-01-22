@@ -34,9 +34,9 @@ import pynng
 import hashlib
 import base58
 from secp256k1 import PrivateKey
-# from proto import spapi_pb2
-import proto.spapi_pb2 as spapi_pb2
-# Ensure that spapi_pb2.py is generated from the .proto file and contains the Transaction class
+from proto import sidepit_api_pb2
+
+# Ensure that sidepit_api_pb2.py is generated from the .proto file and contains the Transaction class
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
@@ -52,18 +52,17 @@ class SidepitClient:
         self.socket.dial(self.server_address)
 
 
-    def create_transaction_message(self,user_id: bytes) -> spapi_pb2.SignedTransaction:
+    def create_transaction_message(self,user_id: bytes) -> sidepit_api_pb2.SignedTransaction:
         """
         Create a new Transaction message.
 
         Args:
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
 
         Returns:
             sidepit_api_pb2.Transaction: The created Transaction message.
         """
-        signedTransaction = spapi_pb2.SignedTransaction()
+        signedTransaction = sidepit_api_pb2.SignedTransaction()
         transaction_msg = signedTransaction.transaction  
         transaction_msg.version = 1
         transaction_msg.timestamp = int(time.time() * 1e9)   
@@ -114,14 +113,14 @@ class SidepitClient:
         return private_key_hex
 
 
-    def send_message(self, message: Union[spapi_pb2.SignedTransaction, bytes]) -> None:
+    def send_message(self, message: Union[sidepit_api_pb2.SignedTransaction, bytes]) -> None:
         """
         Send a message over the socket.
 
         Args:
             message (Union[sidepit_api_pb2.Transaction, bytes]): The message to send.
         """
-        if isinstance(message, spapi_pb2.SignedTransaction):
+        if isinstance(message, sidepit_api_pb2.SignedTransaction):
             serialized_msg = message.SerializeToString()
         elif isinstance(message, bytes):
             serialized_msg = message
@@ -135,7 +134,7 @@ class SidepitClient:
         side: int,
         size: int,
         price: int,
-        symbol: str,
+        ticker: str,
         user_id,
         wif,
     ) -> None:
@@ -143,19 +142,18 @@ class SidepitClient:
         Send a new order message.
 
         Args:
-            side (bool): The side of the order (True for buy, False for sell).
+            side (int): The side of the order (1 for buy, -1 for sell).
             size (int): The size of the order.
             price (int): The price of the order.
-            symbol (str): The symbol of the order.
+            ticker (str): The ticker of the order.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
         stx = self.create_transaction_message(user_id)
         new_order = stx.transaction.new_order
         new_order.side = side
         new_order.size = size
         new_order.price = price
-        new_order.ticker = symbol
+        new_order.ticker = ticker
 
         stx.signature = self.sign_digest(stx.transaction,wif)
         self.send_message(stx)
@@ -170,7 +168,6 @@ class SidepitClient:
         Args:
             order_id (bytes): The ID of the order to cancel.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
 
         stx = self.create_transaction_message(user_id)
@@ -204,7 +201,6 @@ class SidepitClient:
             ordering_salt (str): The ordering salt.
             bid (int): The bid value in satoshis.
             user_id (bytes): The ID of the user.
-            user_signature (bytes): The signature of the user.
         """
 
         stx = self.create_transaction_message(user_id)
