@@ -10,10 +10,15 @@ We have provided everything you need to get started quickly and efficiently.
 
 ## Getting Started
 
-### Clone the Repository and Navigate into It
+### Fork the Repository, Clone Your Fork, and Navigate into It
 
+1. **Fork the Repository**  
+Click the "Fork" button on the [Public API GitHub page](https://github.com/sidepit/Public-API).
+
+2. **Clone Your Fork**  
+Clone your forked repository to your local machine:
 ```sh
-git clone https://github.com/sidepit/Public-API.git
+git clone https://github.com/your-username/Public-API.git
 cd Public-API
 ```
 
@@ -38,3 +43,29 @@ Learn more about these technologies:
 - [NNG](education/nng/README.md)
 - [Protobuf](education/protobuf/README.md)
 - [Cryptography](education/cryptography/README.md)
+
+## Contributing
+
+We welcome contributions! To make a Pull Request (PR):
+
+**Create a New Branch**
+Create and switch to a new branch for your changes:
+
+```sh
+git checkout -b your-branch-name
+```
+
+**Make Changes and Commit them**  
+After making your changes run:
+
+```sh
+git add .
+git commit -m "Describe your changes here"
+```  
+
+**Push the branch**:  
+```sh
+git push origin your-branch-name
+```  
+**Submit a Pull Request**:  
+Go to the original repository on GitHub and click **New Pull Request**. Compare changes from your forked branch and submit the PR with a description of your changes!
