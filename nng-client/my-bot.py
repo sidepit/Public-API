@@ -5,7 +5,7 @@ from datetime import datetime
 from typing import Union
 
 import pynng
-from proto import spapi_pb2
+from proto import sidepit_api_pb2
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 from sidepit_nng_client import SidepitClient
 

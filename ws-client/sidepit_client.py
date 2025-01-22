@@ -31,7 +31,7 @@ from datetime import datetime
 from typing import Union
 
 import pynng
-from protobuf import spapi_pb2
+from protobuf import sidepit_api_pb2
 
 # Define the server address and port
 PROTOCOL = "tcp://"
@@ -54,7 +54,7 @@ class SidepitClient:
 
     def create_transaction_message(
         self, user_id: bytes, user_signature: bytes
-    ) -> spapi_pb2.Transaction:
+    ) -> sidepit_api_pb2.Transaction:
         """
         Create a new Transaction message.
 
@@ -63,23 +63,23 @@ class SidepitClient:
             user_signature (bytes): The signature of the user.
 
         Returns:
-            spapi_pb2.Transaction: The created Transaction message.
+            sidepit_api_pb2.Transaction: The created Transaction message.
         """
-        transaction_msg = spapi_pb2.Transaction()
+        transaction_msg = sidepit_api_pb2.Transaction()
         transaction_msg.version = 1
         transaction_msg.timestamp = int(time.time() * 1e9)  # Nano seconds
         transaction_msg.id = user_id  # User ID bytes
         transaction_msg.signature = user_signature  # User signature bytes
         return transaction_msg
 
-    def send_message(self, message: Union[spapi_pb2.Transaction, bytes]) -> None:
+    def send_message(self, message: Union[sidepit_api_pb2.Transaction, bytes]) -> None:
         """
         Send a message over the socket.
 
         Args:
-            message (Union[spapi_pb2.Transaction, bytes]): The message to send.
+            message (Union[sidepit_api_pb2.Transaction, bytes]): The message to send.
         """
-        if isinstance(message, spapi_pb2.Transaction):
+        if isinstance(message, sidepit_api_pb2.Transaction):
             serialized_msg = message.SerializeToString()
         elif isinstance(message, bytes):
             serialized_msg = message
