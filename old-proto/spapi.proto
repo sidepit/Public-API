@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+// input 
+message Transaction {
+    int32 version = 1;
+    uint64 timestamp = 10; 
+    oneof tx {
+        NewOrder new_order = 20;
+        string cancel_orderid = 30;
+        AuctionBid auction_bid = 40;
+    }
+    string id = 100;
+    bytes signature = 110;   
+}
+
+message NewOrder {
+    bool side = 10;
+    int32 size = 20;
+    int32 price = 30;
+    string symbol = 40;
+}
+
+message AuctionBid {
+    uint64 epoch = 10;
+    string hash = 20;
+    string ordering_salt = 30;
+    int32 bid = 40;  // in satoshis 
+}
+
+// output 
+message EpochEvent {
+    uint64 epoch = 10;
+    string hash = 20;
+    string id = 100;
+    bytes signature = 110; 
+}
+
+message TxBlockStream { 
+    uint64 epoch = 10;
+    oneof txepoch {
+        EpochEvent epoch_event = 20;
+        Transaction tx = 30;
+    }
+}

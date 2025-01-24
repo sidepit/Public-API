@@ -1,0 +1,104 @@
+syntax = "proto3";
+import "spapi.proto";
+
+//input
+message EpochOrders {
+    uint64 epoch = 10;
+    map<string, Transaction> orders = 20;
+}
+
+//output
+message MarketQuote {
+    int32 bidsize = 10;
+    int32 bid = 20;
+    int32 ask = 30;
+    int32 asksize = 40;
+    int32 last = 50;
+    int32 lastsize = 60;
+    bool upordown = 70;
+    string symbol = 80;
+    uint64 epoch = 90;
+}
+
+message EpochBar {
+    string symbol = 10;
+    uint64 epoch = 15;
+    int32 open = 20;
+    int32 high = 30;
+    int32 low = 40;
+    int32 close = 50;
+    int32 volume = 60;
+}
+
+message BookOrder {
+    bool side = 10;
+    int32 price = 20;
+    int32 open_qty = 30;
+    int32 filled_qty = 40;
+    int32 remaining_qty = 50;
+    int32 canceled_qty = 60;
+
+    int32 agres_fill_qty = 62;
+    float agres_avg_price = 63;
+    int32 pass_fill_qty = 64;
+    float avg_price = 65;
+
+    string symbol = 70;
+    string update_time = 80;
+    string orderid = 90;
+    string traderid = 100;
+}
+
+message DepthItem {
+    int32 level = 10;
+    int32 b = 30;
+    int32 a = 40;
+    int32 bs = 50;
+    int32 as = 60;
+}
+
+message MarketData {
+    int32 version = 1;
+    uint64 epoch = 10;
+    EpochBar bar = 20;
+    MarketQuote quote = 30;
+    repeated DepthItem depth = 40;
+}
+
+message FillData {
+    string agressiveid = 10;
+    string passiveid = 20;
+    uint32  price = 30;
+    uint32  qty = 40;
+    int32 agressive_side = 50;
+}
+
+message OrderData {
+    int32 version = 1;
+    uint64 epoch = 10;
+    repeated BookOrder bookorders = 40;
+    repeated FillData fills = 50;
+}
+
+// per user section 
+message Position { 
+    int32 position = 10; //  -1 short 0 flat 1 long   -10 for short 10 
+    uint32 avg_price = 20;
+}
+
+message OrderFills {
+    BookOrder order = 10;
+    repeated FillData fills = 50;
+}
+
+message TraderPositionOrders {
+    string traderid = 10;
+    string symbol = 20;
+    Position position = 30;
+    map<string, OrderFills> orderfills = 40;
+} 
+
+message RequestPositions {
+    string traderid = 10;
+    string symbol = 20;
+}

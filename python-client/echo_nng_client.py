@@ -24,6 +24,7 @@ class EchoClient:
 
     async def broadcast_message(self, serialized_msg: bytes) -> None:
         txblockstream = sidepit_api_pb2.TxBlockStream()
+
         txblockstream.ParseFromString(serialized_msg)
         # print(txblockstream)
         await broadcast(self.clients, MessageToJson(txblockstream,preserving_proto_field_name=True))

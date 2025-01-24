@@ -4,29 +4,28 @@
 
 ## Getting Started
 
-### 1. Clone the Repository and Navigate into It
+### 1. Navigate to `education/nng`
 
 ```sh
-git clone https://github.com/sidepit/101--nng.git
-cd 101--nng
+cd education/nng
 ```
 
 ### 2. Create a Virtual Environment
 
 ```sh
-python -m venv .yourenv
+python -m venv .env
 ```
 
 ### 3. Activate the Virtual Environment
 
 **Windows:**
 ```sh
-.yourenv\Scripts\activate
+.env\Scripts\activate
 ```
 
 **Mac/Linux:**
 ```sh
-source .yourenv/bin/activate
+source .env/bin/activate
 ```
 
 ### 4. Install pynng
@@ -64,7 +63,11 @@ cd reqrep
 
 ### 7. Test the Protocol
 
-Open two terminal windows and run the appropriate file in each one.
+Open **two terminal windows** and run the appropriate file in each one:
+
+- **Pub/Sub**: Run `publisher.py` **first**, then `subscriber.py`.
+- **Req/Rep**: Run `reply.py` **first**, then `request.py`.
+- **Push/Pull**: Run `push.py` **first**, then `pull.py`.
 
 ## What is Pub/Sub?
 
@@ -81,7 +84,7 @@ import time
 with pynng.Pub0() as pub:
     pub.listen("tcp://127.0.0.1:5001")
     while True:
-        pub.send(b"Hello, world!")
+        pub.send(b"Hello, from Sidepit!")
         time.sleep(1)
 
 # pubsub/subscriber.py
@@ -98,10 +101,10 @@ with pynng.Sub0() as sub:
 ### Example Using The Command Line
 
 ```sh
-# In one terminal
+# Open the first terminal and run this command FIRST:
 nngcat --pub --listen tcp://127.0.0.1:5001 --data "cuckoo" --interval 1
 
-# In another terminal
+# Open the second terminal and run this command SECOND:
 nngcat --sub --dial tcp://127.0.0.1:5001 --quoted
 ```
 
@@ -133,17 +136,17 @@ with pynng.Rep0() as rep:
     while True:
         received_message = rep.recv()
         print(received_message.decode())
-        rep.send(b"Message: Hello, world!")
+        rep.send(b"Hello, from Sidepit!")
 ```
 
 ### Example Using The Command Line
 
 ```sh
-# In one terminal
-nngcat --req --dial tcp://127.0.0.1:5001 --data "what is the answer?" --quoted  
+# Open the first terminal and run this command FIRST:
+nngcat --rep --listen tcp://127.0.0.1:5001 --data "42" --quoted     
 
-# In another terminal
-nngcat --rep --listen tcp://127.0.0.1:5001 --data "42" --quoted                                                     
+# Open the second terminal and run this command SECOND:
+nngcat --req --dial tcp://127.0.0.1:5001 --data "what is the answer?" --quoted                                               
 ```
 
 ## What is Push/Pull?
@@ -177,11 +180,11 @@ with pynng.Pull0() as pull:
 ### Example Using The Command Line
 
 ```sh
-# In one terminal
-nngcat --pull --dial tcp://127.0.0.1:5001 --quoted
+# Open the first terminal and run this command FIRST:
+nngcat --push --listen tcp://127.0.0.1:5001 --data "Here is a job for you..."                          
 
-# In another terminal
-nngcat --push --listen tcp://127.0.0.1:5001 --data "Here is a job for you..."                                                   
+# Open the second terminal and run this command SECOND:
+nngcat --pull --dial tcp://127.0.0.1:5001 --quoted                        
 ```
 
 ## Common Functions

@@ -8,16 +8,17 @@ OpenSSL is a cryptographic library and command-line tool that helps secure
 communications over computer networks. It's used by many applications to 
 encrypt and decrypt data, and generate private keys.
 
-### Generate a key pair
+### Navigate into the `ssl` folder and Generate a key pair
 
 ```sh
+cd ssl
 openssl genrsa -out private_key.pem 2048
 openssl rsa -in private_key.pem -pubout -out public_key.pem
 ```
 
 ### Create and sign a message
 
-*Create a file named `message.txt` in the root directory, add your message, and then run:*
+*Create a file named `message.txt`, add your message, and then run:*
 
 ```sh
 openssl dgst -sha256 -sign private_key.pem -out signature.bin message.txt

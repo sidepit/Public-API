@@ -36,7 +36,6 @@ import base58
 from secp256k1 import PrivateKey
 from proto import sidepit_api_pb2
 
-# Ensure that sidepit_api_pb2.py is generated from the .proto file and contains the Transaction class
 from constants import PROTOCOL, ADDRESS, CLIENT_PORT
 
 class SidepitClient:
@@ -52,7 +51,9 @@ class SidepitClient:
         self.socket.dial(self.server_address)
 
 
+
     def create_transaction_message(self,user_id: bytes) -> sidepit_api_pb2.SignedTransaction:
+
         """
         Create a new Transaction message.
 
@@ -62,6 +63,7 @@ class SidepitClient:
         Returns:
             sidepit_api_pb2.Transaction: The created Transaction message.
         """
+
         signedTransaction = sidepit_api_pb2.SignedTransaction()
         transaction_msg = signedTransaction.transaction  
         transaction_msg.version = 1
@@ -99,7 +101,6 @@ class SidepitClient:
         hash2 = hashlib.sha256(hash1).digest()
         if hash2[:4] != checksum:
             raise ValueError("Invalid WIF checksum")
-        
         # Step 4: Determine if the private key is compressed by checking the last byte
         if key_with_optional_compression[-1] == 0x01:
             # Remove the compression byte to get the raw private key
@@ -114,12 +115,14 @@ class SidepitClient:
 
 
     def send_message(self, message: Union[sidepit_api_pb2.SignedTransaction, bytes]) -> None:
+
         """
         Send a message over the socket.
 
         Args:
             message (Union[sidepit_api_pb2.Transaction, bytes]): The message to send.
         """
+
         if isinstance(message, sidepit_api_pb2.SignedTransaction):
             serialized_msg = message.SerializeToString()
         elif isinstance(message, bytes):
@@ -170,6 +173,7 @@ class SidepitClient:
             user_id (bytes): The ID of the user.
         """
 
+
         stx = self.create_transaction_message(user_id)
         stx.transaction.cancel_orderid = order_id
         stx.signature = self.sign_digest(stx.transaction,wif)
@@ -181,7 +185,6 @@ class SidepitClient:
         Close the connection to the server.
         """
         self.socket.close()
-
 
     def send_auction_bid(
         self,
@@ -203,6 +206,7 @@ class SidepitClient:
             user_id (bytes): The ID of the user.
         """
 
+
         stx = self.create_transaction_message(user_id)
         auction_bid = stx.transaction.auction_bid
         auction_bid.epoch = epoch
@@ -213,3 +217,4 @@ class SidepitClient:
         stx.signature = self.sign_digest(stx.transaction,wif)
         self.send_message(stx)
         return  stx.transaction.sidepit_id + ":" + str(stx.transaction.timestamp)
+
