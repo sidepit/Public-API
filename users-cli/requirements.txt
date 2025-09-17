@@ -1,0 +1,12 @@
+click
+bech32
+secp256k1
+ripemd-hash
+base58
+bit
+qrcode
+bitcoinlib
+tabulate
+rich
+protobuf==3.20.1
+pycoin
