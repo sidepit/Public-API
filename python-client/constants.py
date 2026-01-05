@@ -1,5 +1,5 @@
 PROTOCOL = "tcp://"
-ADDRESS = "api.sidepit.com" # "localhost"
+ADDRESS = "localhost" # "api.sidepit.com" # "localhost"
 CLIENT_PORT = "12121"
 FEED_PORT = "12122"
 ECHO_PORT = "12123"
