@@ -1,3 +1,4 @@
 [submodule "Public-API-Data"]
 	path = Public-API-Data
 	url = git@github.com:sidepit/Public-API-Data.git
+    branch = betaV2
