@@ -34,7 +34,7 @@ class SidepitCLIHandler:
         if self.sidepit_manager.available_balance > 0:
             click.secho("'trade' ", fg="magenta")
         else:
-            click.secho("'info' get Ssidepit exchange information", fg="magenta")
+            click.secho("'info' get Sidepit exchange information", fg="magenta")
 
         click.secho("'quit'", fg="red")
 
