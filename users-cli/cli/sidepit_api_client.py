@@ -6,12 +6,26 @@ from id_manager import SidepitIDManager
 from hashlib import sha256  
 from google.protobuf.json_format import MessageToJson
 from constants import SIDEPIT_API_URL
+import pynng
 
 class SidepitApiClient:
-    def __init__(self, id: str, sid: SidepitIDManager) -> None:
-        self.sidepit_id = id 
-        self.ticker = "USDBTCz24"
-        self.idmanager = sid
+    def __init__(self, sidepit_manager, id_manager: SidepitIDManager) -> None:
+        self.sidepit_manager = sidepit_manager  # Reference to get current ticker and ID
+        self.idmanager = id_manager
+        self.socket = None
+        self._init_socket()
+    
+    def _init_socket(self):
+        """Initialize pynng Push0 socket for sending transactions"""
+        try:
+            from constants import PUBLISH_PROTOCOL, PUBLISH_ADDRESS, PUBLISH_PORT
+            publish_address = f"{PUBLISH_PROTOCOL}{PUBLISH_ADDRESS}:{PUBLISH_PORT}"
+            self.socket = pynng.Push0()
+            self.socket.dial(publish_address)
+            print(f"Connected to {publish_address}")
+        except Exception as e:
+            print(f"Failed to connect to publish socket: {e}")
+            self.socket = None
 
     def create_transaction_message(self) -> sidepit_api_pb2.SignedTransaction:
         """
@@ -28,7 +42,8 @@ class SidepitApiClient:
         transaction_msg = signedTransaction.transaction  
         transaction_msg.version = 1
         transaction_msg.timestamp = int(time.time() * 1e9)   
-        transaction_msg.sidepit_id = self.sidepit_id 
+        # Get current sidepit_id from manager (handles wallet switching)
+        transaction_msg.sidepit_id = self.sidepit_manager.sidepit_id
 
         return signedTransaction
 
@@ -40,32 +55,49 @@ class SidepitApiClient:
 
     def do_neworder(self, side, price, size):
         """Place a new order."""
-        # Construct the side
-        
         stx = self.create_transaction_message()
         new_order = stx.transaction.new_order
         new_order.side = side
         new_order.size = size
         new_order.price = price
-        new_order.ticker = self.ticker
+        # Get current active ticker from manager (handles ticker switching)
+        new_order.ticker = self.sidepit_manager.active_ticker
 
         stx.signature = self.sign_digest(stx.transaction)
 
+        # Send protobuf directly via pynng
+        if self.socket:
+            serialized_msg = stx.SerializeToString()
+            try:
+                self.socket.send(serialized_msg)
+                print(f"Transaction sent: {side} {size}@{price}")
+                print(stx)
+            except Exception as e:
+                print(f"Failed to send transaction: {e}")
+        else:
+            print("Socket not connected, cannot send transaction")
 
-        json_message = json.loads(MessageToJson(stx, preserving_proto_field_name=True))
-        print (json_message)
+    def do_cancel(self, oid):
+        """Cancel an order."""
+        stx = self.create_transaction_message()
+        stx.transaction.cancel_orderid = oid
+        stx.signature = self.sign_digest(stx.transaction)
 
-        # json_message = '{ "transaction": { "version": 1, "timestamp": 1733196967903, "newOrder": { "side": -1, "size": 2, "price": 1111,"ticker": "usdbtcz24"},"sidepit_id": "bc1qkl80muggyp9aqn8th0vdpudmt4zftd97ms4rg5"},"signature": "1de61805dbce4149d1e2d44ebb49ed06696b5b7d7363cd5f4033fd827ed2e29a2c44f5d736abeb654b2bc514c9166e622d36d82d92ea0e8d9b1bc87a8ff3abd6"}'
+        # Send protobuf directly via pynng
+        if self.socket:
+            serialized_msg = stx.SerializeToString()
+            try:
+                self.socket.send(serialized_msg)
+                print(f"Cancel transaction sent: {oid}")
+                print(stx)
+            except Exception as e:  
+                print(f"Failed to send transaction: {e}")
+        else:
+            print("Socket not connected, cannot send transaction")
 
-        ret = self.send_order_to_api(json_message)
-        # print(ret)
-        
 
-    def send_order_to_api(self, payload):
-        api_url = SIDEPIT_API_URL + "transaction/"  # Replace with actual API endpoint
-        headers = {"Content-Type": "application/json"}
-        try:
-            response = requests.post(api_url, data=json.dumps(payload), headers=headers)
-            return response.json()
-        except requests.RequestException as e:
-            return {"status": "error", "error": str(e)}
+    def close_connection(self):
+        """Close the pynng socket connection"""
+        if self.socket:
+            self.socket.close()
+            print("Connection closed.")

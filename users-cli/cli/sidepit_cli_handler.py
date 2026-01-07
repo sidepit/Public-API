@@ -80,10 +80,10 @@ class SidepitCLIHandler:
         if self.sidepit_id_manager.is_watch_only():
             click.secho("Cannot cancel orders in watch-only mode. This ID is read-only.", fg='red')
             return
-        return "orderid"
+        self.sidepit_api_trader.do_cancel(oid)
 
     def handle_trading_actions(self) -> None:
-        self.sidepit_api_trader = SidepitApiClient(self.sidepit_manager.sidepit_id,self.sidepit_id_manager) 
+        self.sidepit_api_trader = SidepitApiClient(self.sidepit_manager, self.sidepit_id_manager) 
 
         self.sidepit_manager.print_product()
         self.sidepit_manager.print_quote()
@@ -116,6 +116,10 @@ class SidepitCLIHandler:
                 yn = self.ask_user("cancel " + oid + "? \n y/n")
                 if yn == 'y':
                     self.do_cancel(oid) 
+                continue
+            elif action == "pos":
+                self.sidepit_manager.update_balance()
+                self.print_trading()
                 continue
             elif action == "quote":
                 self.sidepit_manager.print_product()
@@ -374,7 +378,7 @@ class SidepitCLIHandler:
         click.secho("'switch' switch to a different wallet", fg="green")
         click.secho("'import' Sidepit Id with 'wif' private keys", fg="magenta")
         click.secho("'create' New Sidepit Id on this computer", fg="magenta")
-        click.secho("'quit'", fg="red")
+        click.secho("'back'", fg="red")
 
     def handle_accounts_actions(self):
         while True:
@@ -382,7 +386,7 @@ class SidepitCLIHandler:
             self.print_account_action_list()
             
             action = click.prompt("\nEnter action") 
-            if action == "quit":
+            if action == "back":
                 return
             elif action == "change name":
                 old_name=click.prompt("\nEnter the name of the wallet you want to change")
@@ -403,7 +407,7 @@ class SidepitCLIHandler:
                 if new_active_wallet_name == self.sidepit_id_manager.active_wallet:
                     continue
                 self.switch_wallet(new_active_wallet_name)
-                continue
+                return
             elif action == "import":
                 wif = click.prompt("Enter WIF private key")
                 wallet_name=self.sidepit_id_manager.import_wif(wif)

@@ -7,3 +7,8 @@ MEMPOOL_API_URL="https://mempool.space/api/v1/fees/recommended"
 SIDEPIT_REQ_HOST = "localhost"  # "api.sidepit.com"
 SIDEPIT_REQ_PORT = "12125"
 SIDEPIT_REQ_PROTOCOL = "tcp://"
+
+# Transaction publish settings
+PUBLISH_PROTOCOL = "tcp://"
+PUBLISH_ADDRESS = "localhost"
+PUBLISH_PORT = "12121"
