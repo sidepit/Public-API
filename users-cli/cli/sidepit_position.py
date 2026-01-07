@@ -6,11 +6,8 @@ from rich.panel import Panel
 class SidepitTrader:
     ACCOUNT_METRICS = [
         ("Net Locked", "net_locked"),
-        ("Margin Required", "margin_required"),
         ("Available Balance", "available_balance"),
         ("Available Margin", "available_margin"),
-        ("Realized PnL", "realized_pnl"),
-        ("Unrealized PnL", "unrealized_pnl")
     ]
 
     def __init__(self) -> None:
@@ -52,9 +49,33 @@ class SidepitTrader:
         # Columns
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="bold yellow")
-        # Rows
+        
+        # Basic account metrics
         for label, key in self.ACCOUNT_METRICS:
-            table.add_row(label, self.account_state[key])
+            value = self.account_state.get(key, 0) if isinstance(self.account_state, dict) else getattr(self.account_state, key, 0)
+            table.add_row(label, str(value))
+        
+        # Add contract-specific margin data if available
+        if isinstance(self.account_state, dict):
+            contract_margins = self.account_state.get('contract_margins', {})
+        else:
+            contract_margins = getattr(self.account_state, 'contract_margins', {})
+        
+        if contract_margins:
+            table.add_row("", "")  # Separator
+            for symbol, contract_margin in contract_margins.items():
+                if isinstance(contract_margin, dict):
+                    margin = contract_margin.get('margin', {})
+                    margin_required = margin.get('margin_required', 0)
+                    realized_pnl = margin.get('realized_pnl', 0)
+                else:
+                    margin = getattr(contract_margin, 'margin', None)
+                    margin_required = getattr(margin, 'margin_required', 0) if margin else 0
+                    realized_pnl = getattr(margin, 'realized_pnl', 0) if margin else 0
+                
+                table.add_row(f"{symbol} Margin Required", str(margin_required))
+                table.add_row(f"{symbol} Realized PnL", str(realized_pnl))
+        
         # Print  
         self.console.print(table)
 

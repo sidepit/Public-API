@@ -8,6 +8,10 @@ from sidepit_position import SidepitTrader
 from rich.console import Console
 from rich.table import Table
 from constants import SIDEPIT_API_URL
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../python-client'))
+from req_client import SidepitReqClient
 
 class SidepitManager:
     DEBUG=False
@@ -18,7 +22,22 @@ class SidepitManager:
         self.net_locked = 0 
         self.pnding_locked_balance = 0
         self.positions = None
+        self.req_client = None
+        self._init_req_client()
 
+    def _init_req_client(self):
+        """Initialize the request client for protobuf communication"""
+        try:
+            from constants import SIDEPIT_REQ_HOST, SIDEPIT_REQ_PORT, SIDEPIT_REQ_PROTOCOL
+            self.req_client = SidepitReqClient(
+                protocol=SIDEPIT_REQ_PROTOCOL,
+                host=SIDEPIT_REQ_HOST,
+                port=SIDEPIT_REQ_PORT
+            )
+        except Exception as e:
+            click.secho(f"Warning: Could not connect to request server: {e}", fg='yellow')
+            self.req_client = None
+    
     def use_id(self, sidepit_id) -> None:
         self.sidepit_id = sidepit_id
         # print("using id", sidepit_id)
@@ -26,13 +45,13 @@ class SidepitManager:
    
     def update_balance(self):
         try:
-            url =  SIDEPIT_API_URL + "request_position/" + self.sidepit_id
-            response = requests.get(url)
-            if response.status_code != 200:
-                click.secho(f"Error getting locked balance: {response.text}", fg='red')
-                return
-            
-            self.get_positions_json = response.json()
+            # Use protobuf client - store protobuf object
+            self.positions_data = self.req_client.get_positions(self.sidepit_id)
+            # For compatibility with existing code that needs JSON
+            from google.protobuf.json_format import MessageToDict
+            self.get_positions_json = MessageToDict(self.positions_data, 
+                                                    preserving_proto_field_name=True,
+                                                    including_default_value_fields=True)
             self.terminal.new_data(self.get_positions_json)
 
             tx_arr=[int(tx['lock_sats']) for tx in self.get_positions_json['locks'] if tx['is_pending']]
@@ -294,23 +313,17 @@ class SidepitManager:
         # filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
         # print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
 
-    def print_quote(self): 
-        self.quotron.display(self.get_api("quote"))
+    def print_quote(self):
+        quote_pb = self.req_client.get_quote()
+        self.quotron.display(quote_pb)
 
-    def print_last(self): 
-        self.quotron.display(self.get_api("quote"), True)
+    def print_last(self):
+        quote_pb = self.req_client.get_quote()
+        self.quotron.display(quote_pb, last_only=True)
 
-    def print_product(self): 
-        self.quotron.display_product(self.get_api("active_product"))
-
-    def get_api(self, api): 
-        url =  SIDEPIT_API_URL + api + "/"
-        response = requests.get(url)
-        if response.status_code != 200:
-            click.secho(f"Error getting quote: {response.text}", fg='red')
-            return
-        
-        return response.json()
+    def print_product(self):
+        product_pb = self.req_client.get_active_product()
+        self.quotron.display_product(product_pb)
 
     def active(self) -> bool:
         return self.pnding_locked_balance > 0 or self.available_balance != 0 or self.net_locked > 0 
