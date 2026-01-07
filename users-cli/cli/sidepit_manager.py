@@ -25,6 +25,7 @@ class SidepitManager:
         self.req_client = None
         self.active_ticker = None
         self.available_tickers = []
+        self.exchange_status = None  # Track exchange state
         self._init_req_client()
 
     def _init_req_client(self):
@@ -373,7 +374,13 @@ class SidepitManager:
         # Extract available tickers from schedule
         if product_pb.exchange_status.session.schedule.product:
             self.available_tickers = list(product_pb.exchange_status.session.schedule.product)
+        # Store exchange status
+        self.exchange_status = product_pb.exchange_status.status.estate
         self.quotron.display_product(product_pb)
+
+    def is_exchange_open(self):
+        """Check if exchange is open (status = 2 = EXCHANGE_OPEN)"""
+        return self.exchange_status == 2
 
     def active(self) -> bool:
         return self.pnding_locked_balance > 0 or self.available_balance != 0 or self.net_locked > 0 

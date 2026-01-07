@@ -179,6 +179,18 @@ class SidepitQuote:
         session = api_data.exchange_status.session
         contractbar = api_data.contractbar
         
+        # Convert enum to string name
+        try:
+            # Import the protobuf module to get enum names
+            import sys
+            import os
+            sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../python-client/proto'))
+            from sidepit_api_pb2 import ExchangeState
+            exchange_status_str = ExchangeState.Name(status.estate)
+        except:
+            # Fallback to number if import fails
+            exchange_status_str = str(status.estate)
+        
         contract_info = f"""
         [bold cyan]Symbol[/bold cyan]: {contract.symbol} ({product.ticker})
         [bold cyan]Expiration[/bold cyan]: {self.convert_timestamp(product.expiration_date)}
@@ -201,7 +213,7 @@ class SidepitQuote:
         active_marker = f" ([bold green]Current: {product.ticker}[/bold green])" if product.ticker else ""
         
         session_info = f"""
-        [bold cyan]Exchange Status[/bold cyan]: {status.estate}
+        [bold cyan]Exchange Status[/bold cyan]: {exchange_status_str}
         [bold cyan]Session ID[/bold cyan]: {session.session_id}
         [bold cyan]Available Tickers[/bold cyan]: {ticker_list}{active_marker}
         [bold cyan]Session Times[/bold cyan]: 

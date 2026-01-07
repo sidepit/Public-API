@@ -49,7 +49,9 @@ class SidepitCLIHandler:
 
     def trading_menu(self) -> None:
         self.sidepit_manager.print_last()
-        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'tickers', 'wallet','quit',", fg="green")
+        # Change color based on exchange status
+        menu_color = "green" if self.sidepit_manager.is_exchange_open() else "red"
+        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'tickers', 'wallet','quit',", fg=menu_color)
         # click.secho("'sell'", fg="red")
         # click.secho("'cancel'", fg="blue")
         # click.secho("'quote'", fg="blue")
