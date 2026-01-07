@@ -43,6 +43,7 @@ class SidepitCLIHandler:
         click.secho(f"Choose to create/import Sidepit_Id and store keys at: {self.sidepit_id_manager.wallet_file_path}", fg="cyan")
         click.secho("'create' New Sidepit Id on this computer", fg="green")
         click.secho("'import' Sidepit Id with 'wif' private keys", fg="magenta")
+        click.secho("'watch' Monitor a trader_id (read-only, no trading)", fg="yellow")
         click.secho("'manage' add or switch wallet", fg="magenta")
         click.secho("'quit'", fg="red")
 
@@ -67,10 +68,16 @@ class SidepitCLIHandler:
     def ask_user(self, prompt_text, default=None):
         return click.prompt(prompt_text, default=default)
 
-    def do_neworder(self, side, price, size): 
+    def do_neworder(self, side, price, size):
+        if self.sidepit_id_manager.is_watch_only():
+            click.secho("Cannot place orders in watch-only mode. This ID is read-only.", fg='red')
+            return
         self.sidepit_api_trader.do_neworder(side, price, size)
 
-    def do_cancel(self, oid): 
+    def do_cancel(self, oid):
+        if self.sidepit_id_manager.is_watch_only():
+            click.secho("Cannot cancel orders in watch-only mode. This ID is read-only.", fg='red')
+            return
         return "orderid"
 
     def handle_trading_actions(self) -> None:
@@ -178,6 +185,14 @@ class SidepitCLIHandler:
             elif action == "import" or action == "wif":
                 wif = click.prompt("Enter WIF private key")
                 self.sidepit_id_manager.import_wif(wif)
+            elif action == "watch":
+                trader_id = click.prompt("Enter trader_id to monitor (bc1...)")
+                try:
+                    self.sidepit_id_manager.set_watch_only_id(trader_id)
+                    click.secho(f"Now watching trader: {trader_id} (read-only mode)", fg="yellow")
+                except ValueError as e:
+                    click.secho(f"Error: {e}", fg="red")
+                    continue
         self.new_id()
 
     def have_folder(self) ->bool:
