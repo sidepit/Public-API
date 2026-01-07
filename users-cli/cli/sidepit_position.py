@@ -129,21 +129,30 @@ class SidepitTrader:
         #     self.console.print(panel)
 
      
-    def display_positions(self) -> None:
+    def display_positions(self, active_ticker=None) -> None:
         if self.positions:
-            # Table
-            table = Table(title="Open Positions", header_style="bold green")
-            # Columns
-            table.add_column("Ticker", style="cyan")
-            table.add_column("Position Size", style="bold yellow")
-            table.add_column("Average Price", style="bold yellow")
-            # Rows
+            # Filter positions: show active ticker + any with non-zero position
+            filtered_positions = {}
             for ticker, details in self.positions.items():
-                position = str(details["position"])
-                avg_price = str(details["avg_price"])
-                table.add_row(ticker, position, avg_price)
-            # Print
-            self.console.print(table)
+                position_size = details.get("position", 0)
+                # Show if it's the active ticker OR has non-zero position
+                if ticker == active_ticker or position_size != 0:
+                    filtered_positions[ticker] = details
+            
+            if filtered_positions:
+                # Table
+                table = Table(title="Open Positions", header_style="bold green")
+                # Columns
+                table.add_column("Ticker", style="cyan")
+                table.add_column("Position Size", style="bold yellow")
+                table.add_column("Average Price", style="bold yellow")
+                # Rows
+                for ticker, details in filtered_positions.items():
+                    position = str(details["position"])
+                    avg_price = str(details["avg_price"])
+                    table.add_row(ticker, position, avg_price)
+                # Print
+                self.console.print(table)
         # else:
         #     panel = Panel("[bold red]No open positions.[/bold red]", border_style="red")
         #     self.console.print(panel)
@@ -197,7 +206,7 @@ class SidepitTrader:
             return
 
 
-    def display(self) -> None: 
+    def display(self, active_ticker=None) -> None: 
         self.display_trader_info()
         # Display Account State
         if not self.account_state: 
@@ -206,7 +215,7 @@ class SidepitTrader:
 
         self.create_account_table()
         # Display Open Positions
-        self.display_positions()
+        self.display_positions(active_ticker)
         # Display Order Fills
         self.display_order_details()
         # Display Locks

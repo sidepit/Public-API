@@ -196,9 +196,14 @@ class SidepitQuote:
         contract_panel = Panel(contract_info, title="Contract Details", border_style="green")
 
         # Session and Status Information
+        # Build ticker list
+        ticker_list = ", ".join(session.schedule.product) if session.schedule.product else "None"
+        active_marker = f" ([bold green]Current: {product.ticker}[/bold green])" if product.ticker else ""
+        
         session_info = f"""
         [bold cyan]Exchange Status[/bold cyan]: {status.estate}
         [bold cyan]Session ID[/bold cyan]: {session.session_id}
+        [bold cyan]Available Tickers[/bold cyan]: {ticker_list}{active_marker}
         [bold cyan]Session Times[/bold cyan]: 
             Start - {self.convert_timestamp(session.schedule.trading_open_time)}
             End - {self.convert_timestamp(session.schedule.trading_close_time)}

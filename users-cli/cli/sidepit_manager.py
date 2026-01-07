@@ -110,7 +110,7 @@ class SidepitManager:
         if pretty:
             self.terminal.display_trader_info()
             self.terminal.create_account_table()
-            self.terminal.display_positions()
+            self.terminal.display_positions(self.active_ticker)
             return
 
         print("Positions:")
