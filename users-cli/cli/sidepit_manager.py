@@ -61,7 +61,18 @@ class SidepitManager:
             if self.accountstate is not None: 
                 self.available_balance = int(self.accountstate['available_balance'])
                 self.net_locked = int(self.accountstate['net_locked'])
-                self.positions = self.accountstate['positions']
+                
+                # Extract positions from new nested structure
+                self.positions = {}
+                contract_margins = self.accountstate.get('contract_margins', {})
+                for symbol, contract_margin in contract_margins.items():
+                    ticker_positions = contract_margin.get('positions', {})
+                    for ticker, ticker_pos_data in ticker_positions.items():
+                        position_data = ticker_pos_data.get('position', {})
+                        self.positions[ticker] = {
+                            'position': position_data.get('position', 0),
+                            'avg_price': position_data.get('avg_price', 0.0)
+                        }
 
 
                 if self.DEBUG:

@@ -175,10 +175,25 @@ class SidepitTrader:
         try: 
             self.data = data
             self.account_state = self.data.get("accountstate", None)
-            self.positions = self.account_state.get("positions", None)
+            
+            # Extract positions from new nested structure
+            self.positions = {}
+            if self.account_state:
+                contract_margins = self.account_state.get('contract_margins', {})
+                # Flatten positions from all contracts
+                for symbol, contract_margin in contract_margins.items():
+                    ticker_positions = contract_margin.get('positions', {})
+                    for ticker, ticker_pos_data in ticker_positions.items():
+                        position_data = ticker_pos_data.get('position', {})
+                        self.positions[ticker] = {
+                            'position': position_data.get('position', 0),
+                            'avg_price': position_data.get('avg_price', 0.0)
+                        }
+            
             self.orderfills = self.data.get("orderfills", None)
             self.locks =  self.data.get("locks", None)
         except Exception as e:
+            print(f"Error processing position data: {e}")
             return
 
 
