@@ -23,6 +23,8 @@ class SidepitManager:
         self.pnding_locked_balance = 0
         self.positions = None
         self.req_client = None
+        self.active_ticker = None
+        self.available_tickers = []
         self._init_req_client()
 
     def _init_req_client(self):
@@ -325,15 +327,52 @@ class SidepitManager:
         # print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
 
     def print_quote(self):
-        quote_pb = self.req_client.get_quote()
+        quote_pb = self.req_client.get_quote(self.active_ticker)
         self.quotron.display(quote_pb)
 
     def print_last(self):
-        quote_pb = self.req_client.get_quote()
+        quote_pb = self.req_client.get_quote(self.active_ticker)
         self.quotron.display(quote_pb, last_only=True)
+    
+    def list_tickers(self):
+        """Display available tickers from schedule"""
+        if not self.available_tickers:
+            click.secho("No tickers available. Call print_product first.", fg='yellow')
+            return
+        click.secho("\nAvailable Tickers:", fg='cyan')
+        for i, ticker in enumerate(self.available_tickers, 1):
+            marker = "[CURRENT]" if ticker == self.active_ticker else ""
+            click.secho(f"  {i}. {ticker} {marker}", fg='green' if marker else 'white')
+    
+    def switch_ticker(self, ticker_or_index):
+        """Switch to a different ticker by name or number"""
+        # Try to parse as numeric index
+        try:
+            index = int(ticker_or_index) - 1  # Convert 1-based to 0-based
+            if 0 <= index < len(self.available_tickers):
+                ticker = self.available_tickers[index]
+            else:
+                click.secho(f"Invalid ticker number. Choose 1-{len(self.available_tickers)}", fg='red')
+                return False
+        except ValueError:
+            # Not a number, treat as ticker name
+            ticker = ticker_or_index
+        
+        if ticker not in self.available_tickers:
+            click.secho(f"Ticker {ticker} not available in schedule", fg='red')
+            return False
+        self.active_ticker = ticker
+        click.secho(f"Switched to ticker: {ticker}", fg='green')
+        return True
 
     def print_product(self):
-        product_pb = self.req_client.get_active_product()
+        product_pb = self.req_client.get_active_product(self.active_ticker)
+        # Extract and store active ticker from product
+        if product_pb.active_contract_product.product.ticker:
+            self.active_ticker = product_pb.active_contract_product.product.ticker
+        # Extract available tickers from schedule
+        if product_pb.exchange_status.session.schedule.product:
+            self.available_tickers = list(product_pb.exchange_status.session.schedule.product)
         self.quotron.display_product(product_pb)
 
     def active(self) -> bool:

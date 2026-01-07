@@ -106,55 +106,63 @@ class SidepitQuote:
     product_data = {
         "active_contract_product": {
             "contract": {
-                "symbol": "TUSDBTC",
-                "unit_size": 100,
+                "symbol": "USDBTC",
+                "unit_size": 500,
                 "unit": "USD",
                 "price_quote": "SAT",
                 "price_quote_units": 1,
                 "tic_min": 1,
-                "tic_value": 100,
+                "tic_value": 500,
                 "price_limit_percent": 25,
-                "initial_margin": "50000",
-                "maint_margin": "25000",
-                "position_limits": 10,
-                "trading_open_time": "79200000",
-                "trading_close_time": "75600000"
+                "initial_margin": "200000",
+                "maint_margin": "100000",
+                "position_limits": 200,
+                "trading_open_time": "50400000",
+                "trading_close_time": "7200000",
+                "trading_open_time_zone": "03:00:00 America/Los_Angeles",
+                "trading_close_time_zone": "00:00:00 America/Los_Angeles"
             },
             "product": {
-                "ticker": "TUSDBTCZ24",
-                "contract_symbol": "TUSDBTC",
-                "expiration_date": "1735257600000",
-                "start_trading_date": "1727740800000",
+                "ticker": "USDBTCH26",
+                "contract_symbol": "USDBTC",
+                "expiration_date": "1774569600000",
+                "start_trading_date": "1758844800000",
                 "is_active": True
+            },
+            "schedule": {
+                "date": "1767744000000",
+                "trading_open_time": "1767697200000",
+                "trading_close_time": "1767772800000",
+                "product": ["USDBTCH26", "USDBTCM26"]
             }
         },
         "exchange_status": {
             "session": {
-                "session_id": "1733443200000",
+                "session_id": "1767744000000",
                 "schedule": {
-                    "date": "1733443200000",
-                    "trading_open_time": "1733436000000",
-                    "trading_close_time": "1733518800000",
-                    "product": ["TUSDBTCZ24"]
+                    "date": "1767744000000",
+                    "trading_open_time": "1767697200000",
+                    "trading_close_time": "1767772800000",
+                    "product": ["USDBTCH26", "USDBTCM26"]
                 },
-                "prev_session_id": "1733356800000"
+                "prev_session_id": "1767657600000"
             },
             "status": {
-                "estate": "EXCHANGE_OPEN",
-                "session_id": "1733443200000"
+                "estate": "EXCHANGE_CLOSED",
+                "session_id": "1767744000000"
             }
         },
         "contractbar": {
-            "day_open": 1010,
-            "day_high": 1010,
-            "day_low": 1010,
-            "day_close": 1010,
-            "day_volume": 3,
-            "high": 1025,
-            "low": 1010,
-            "volume": 44,
-            "open_interest": 44,
-            "previous_close": 1024,
+            "day_open": 1115,
+            "day_high": 1115,
+            "day_low": 1104,
+            "day_close": 1104,
+            "day_volume": 29,
+            "high": 1115,
+            "low": 999,
+            "volume": 90,
+            "open_interest": 90,
+            "previous_close": 1111,
             "ticker": "",
             "epoch": "0"
         }

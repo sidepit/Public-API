@@ -49,7 +49,7 @@ class SidepitCLIHandler:
 
     def trading_menu(self) -> None:
         self.sidepit_manager.print_last()
-        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'lock','quit',", fg="green")
+        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'tickers', 'wallet','quit',", fg="green")
         # click.secho("'sell'", fg="red")
         # click.secho("'cancel'", fg="blue")
         # click.secho("'quote'", fg="blue")
@@ -136,8 +136,16 @@ class SidepitCLIHandler:
                 self.sidepit_manager.update_balance()
                 self.print_trading()
                 self.sidepit_manager.print_all()
-                continue            
-            elif action == "lock":
+                continue
+            elif action == "tickers":
+                self.sidepit_manager.list_tickers()
+                switch = self.ask_user("Switch ticker? (ticker name or 'n')", default='n')
+                if switch != 'n':
+                    if self.sidepit_manager.switch_ticker(switch):
+                        self.sidepit_manager.print_product()
+                        self.sidepit_manager.print_quote()
+                continue
+            elif action == "wallet":
                 self.handle_balance_actions()
             self.print_trading()
 
