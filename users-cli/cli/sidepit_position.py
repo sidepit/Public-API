@@ -6,11 +6,8 @@ from rich.panel import Panel
 class SidepitTrader:
     ACCOUNT_METRICS = [
         ("Net Locked", "net_locked"),
-        ("Margin Required", "margin_required"),
         ("Available Balance", "available_balance"),
         ("Available Margin", "available_margin"),
-        ("Realized PnL", "realized_pnl"),
-        ("Unrealized PnL", "unrealized_pnl")
     ]
 
     def __init__(self) -> None:
@@ -52,9 +49,33 @@ class SidepitTrader:
         # Columns
         table.add_column("Metric", style="cyan")
         table.add_column("Value", style="bold yellow")
-        # Rows
+        
+        # Basic account metrics
         for label, key in self.ACCOUNT_METRICS:
-            table.add_row(label, self.account_state[key])
+            value = self.account_state.get(key, 0) if isinstance(self.account_state, dict) else getattr(self.account_state, key, 0)
+            table.add_row(label, str(value))
+        
+        # Add contract-specific margin data if available
+        if isinstance(self.account_state, dict):
+            contract_margins = self.account_state.get('contract_margins', {})
+        else:
+            contract_margins = getattr(self.account_state, 'contract_margins', {})
+        
+        if contract_margins:
+            table.add_row("", "")  # Separator
+            for symbol, contract_margin in contract_margins.items():
+                if isinstance(contract_margin, dict):
+                    margin = contract_margin.get('margin', {})
+                    margin_required = margin.get('margin_required', 0)
+                    realized_pnl = margin.get('realized_pnl', 0)
+                else:
+                    margin = getattr(contract_margin, 'margin', None)
+                    margin_required = getattr(margin, 'margin_required', 0) if margin else 0
+                    realized_pnl = getattr(margin, 'realized_pnl', 0) if margin else 0
+                
+                table.add_row(f"{symbol} Margin Required", str(margin_required))
+                table.add_row(f"{symbol} Realized PnL", str(realized_pnl))
+        
         # Print  
         self.console.print(table)
 
@@ -108,21 +129,30 @@ class SidepitTrader:
         #     self.console.print(panel)
 
      
-    def display_positions(self) -> None:
+    def display_positions(self, active_ticker=None) -> None:
         if self.positions:
-            # Table
-            table = Table(title="Open Positions", header_style="bold green")
-            # Columns
-            table.add_column("Ticker", style="cyan")
-            table.add_column("Position Size", style="bold yellow")
-            table.add_column("Average Price", style="bold yellow")
-            # Rows
+            # Filter positions: show active ticker + any with non-zero position
+            filtered_positions = {}
             for ticker, details in self.positions.items():
-                position = str(details["position"])
-                avg_price = str(details["avg_price"])
-                table.add_row(ticker, position, avg_price)
-            # Print
-            self.console.print(table)
+                position_size = details.get("position", 0)
+                # Show if it's the active ticker OR has non-zero position
+                if ticker == active_ticker or position_size != 0:
+                    filtered_positions[ticker] = details
+            
+            if filtered_positions:
+                # Table
+                table = Table(title="Open Positions", header_style="bold green")
+                # Columns
+                table.add_column("Ticker", style="cyan")
+                table.add_column("Position Size", style="bold yellow")
+                table.add_column("Average Price", style="bold yellow")
+                # Rows
+                for ticker, details in filtered_positions.items():
+                    position = str(details["position"])
+                    avg_price = str(details["avg_price"])
+                    table.add_row(ticker, position, avg_price)
+                # Print
+                self.console.print(table)
         # else:
         #     panel = Panel("[bold red]No open positions.[/bold red]", border_style="red")
         #     self.console.print(panel)
@@ -154,14 +184,29 @@ class SidepitTrader:
         try: 
             self.data = data
             self.account_state = self.data.get("accountstate", None)
-            self.positions = self.account_state.get("positions", None)
+            
+            # Extract positions from new nested structure
+            self.positions = {}
+            if self.account_state:
+                contract_margins = self.account_state.get('contract_margins', {})
+                # Flatten positions from all contracts
+                for symbol, contract_margin in contract_margins.items():
+                    ticker_positions = contract_margin.get('positions', {})
+                    for ticker, ticker_pos_data in ticker_positions.items():
+                        position_data = ticker_pos_data.get('position', {})
+                        self.positions[ticker] = {
+                            'position': position_data.get('position', 0),
+                            'avg_price': position_data.get('avg_price', 0.0)
+                        }
+            
             self.orderfills = self.data.get("orderfills", None)
             self.locks =  self.data.get("locks", None)
         except Exception as e:
+            print(f"Error processing position data: {e}")
             return
 
 
-    def display(self) -> None: 
+    def display(self, active_ticker=None) -> None: 
         self.display_trader_info()
         # Display Account State
         if not self.account_state: 
@@ -170,7 +215,7 @@ class SidepitTrader:
 
         self.create_account_table()
         # Display Open Positions
-        self.display_positions()
+        self.display_positions(active_ticker)
         # Display Order Fills
         self.display_order_details()
         # Display Locks

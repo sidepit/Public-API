@@ -34,7 +34,7 @@ class SidepitCLIHandler:
         if self.sidepit_manager.available_balance > 0:
             click.secho("'trade' ", fg="magenta")
         else:
-            click.secho("'info' get Ssidepit exchange information", fg="magenta")
+            click.secho("'info' get Sidepit exchange information", fg="magenta")
 
         click.secho("'quit'", fg="red")
 
@@ -43,12 +43,15 @@ class SidepitCLIHandler:
         click.secho(f"Choose to create/import Sidepit_Id and store keys at: {self.sidepit_id_manager.wallet_file_path}", fg="cyan")
         click.secho("'create' New Sidepit Id on this computer", fg="green")
         click.secho("'import' Sidepit Id with 'wif' private keys", fg="magenta")
+        click.secho("'watch' Monitor a trader_id (read-only, no trading)", fg="yellow")
         click.secho("'manage' add or switch wallet", fg="magenta")
         click.secho("'quit'", fg="red")
 
     def trading_menu(self) -> None:
         self.sidepit_manager.print_last()
-        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'lock','quit',", fg="green")
+        # Change color based on exchange status
+        menu_color = "green" if self.sidepit_manager.is_exchange_open() else "red"
+        click.secho("\n'new', 'cancel', 'quote','product','pos','open' orders,'closed' orders, 'all' orders, 'tickers', 'wallet','quit',", fg=menu_color)
         # click.secho("'sell'", fg="red")
         # click.secho("'cancel'", fg="blue")
         # click.secho("'quote'", fg="blue")
@@ -67,14 +70,20 @@ class SidepitCLIHandler:
     def ask_user(self, prompt_text, default=None):
         return click.prompt(prompt_text, default=default)
 
-    def do_neworder(self, side, price, size): 
+    def do_neworder(self, side, price, size):
+        if self.sidepit_id_manager.is_watch_only():
+            click.secho("Cannot place orders in watch-only mode. This ID is read-only.", fg='red')
+            return
         self.sidepit_api_trader.do_neworder(side, price, size)
 
-    def do_cancel(self, oid): 
-        return "orderid"
+    def do_cancel(self, oid):
+        if self.sidepit_id_manager.is_watch_only():
+            click.secho("Cannot cancel orders in watch-only mode. This ID is read-only.", fg='red')
+            return
+        self.sidepit_api_trader.do_cancel(oid)
 
     def handle_trading_actions(self) -> None:
-        self.sidepit_api_trader = SidepitApiClient(self.sidepit_manager.sidepit_id,self.sidepit_id_manager) 
+        self.sidepit_api_trader = SidepitApiClient(self.sidepit_manager, self.sidepit_id_manager) 
 
         self.sidepit_manager.print_product()
         self.sidepit_manager.print_quote()
@@ -108,6 +117,10 @@ class SidepitCLIHandler:
                 if yn == 'y':
                     self.do_cancel(oid) 
                 continue
+            elif action == "pos":
+                self.sidepit_manager.update_balance()
+                self.print_trading()
+                continue
             elif action == "quote":
                 self.sidepit_manager.print_product()
                 self.sidepit_manager.print_quote()
@@ -129,8 +142,16 @@ class SidepitCLIHandler:
                 self.sidepit_manager.update_balance()
                 self.print_trading()
                 self.sidepit_manager.print_all()
-                continue            
-            elif action == "lock":
+                continue
+            elif action == "tickers":
+                self.sidepit_manager.list_tickers()
+                switch = self.ask_user("Switch ticker? (ticker name or 'n')", default='n')
+                if switch != 'n':
+                    if self.sidepit_manager.switch_ticker(switch):
+                        self.sidepit_manager.print_product()
+                        self.sidepit_manager.print_quote()
+                continue
+            elif action == "wallet":
                 self.handle_balance_actions()
             self.print_trading()
 
@@ -178,6 +199,14 @@ class SidepitCLIHandler:
             elif action == "import" or action == "wif":
                 wif = click.prompt("Enter WIF private key")
                 self.sidepit_id_manager.import_wif(wif)
+            elif action == "watch":
+                trader_id = click.prompt("Enter trader_id to monitor (bc1...)")
+                try:
+                    self.sidepit_id_manager.set_watch_only_id(trader_id)
+                    click.secho(f"Now watching trader: {trader_id} (read-only mode)", fg="yellow")
+                except ValueError as e:
+                    click.secho(f"Error: {e}", fg="red")
+                    continue
         self.new_id()
 
     def have_folder(self) ->bool:
@@ -349,7 +378,7 @@ class SidepitCLIHandler:
         click.secho("'switch' switch to a different wallet", fg="green")
         click.secho("'import' Sidepit Id with 'wif' private keys", fg="magenta")
         click.secho("'create' New Sidepit Id on this computer", fg="magenta")
-        click.secho("'quit'", fg="red")
+        click.secho("'back'", fg="red")
 
     def handle_accounts_actions(self):
         while True:
@@ -357,7 +386,7 @@ class SidepitCLIHandler:
             self.print_account_action_list()
             
             action = click.prompt("\nEnter action") 
-            if action == "quit":
+            if action == "back":
                 return
             elif action == "change name":
                 old_name=click.prompt("\nEnter the name of the wallet you want to change")
@@ -378,7 +407,7 @@ class SidepitCLIHandler:
                 if new_active_wallet_name == self.sidepit_id_manager.active_wallet:
                     continue
                 self.switch_wallet(new_active_wallet_name)
-                continue
+                return
             elif action == "import":
                 wif = click.prompt("Enter WIF private key")
                 wallet_name=self.sidepit_id_manager.import_wif(wif)

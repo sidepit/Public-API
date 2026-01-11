@@ -8,6 +8,10 @@ from sidepit_position import SidepitTrader
 from rich.console import Console
 from rich.table import Table
 from constants import SIDEPIT_API_URL
+import sys
+import os
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../python-client'))
+from req_client import SidepitReqClient
 
 class SidepitManager:
     DEBUG=False
@@ -18,7 +22,25 @@ class SidepitManager:
         self.net_locked = 0 
         self.pnding_locked_balance = 0
         self.positions = None
+        self.req_client = None
+        self.active_ticker = None
+        self.available_tickers = []
+        self.exchange_status = None  # Track exchange state
+        self._init_req_client()
 
+    def _init_req_client(self):
+        """Initialize the request client for protobuf communication"""
+        try:
+            from constants import SIDEPIT_REQ_HOST, SIDEPIT_REQ_PORT, SIDEPIT_REQ_PROTOCOL
+            self.req_client = SidepitReqClient(
+                protocol=SIDEPIT_REQ_PROTOCOL,
+                host=SIDEPIT_REQ_HOST,
+                port=SIDEPIT_REQ_PORT
+            )
+        except Exception as e:
+            click.secho(f"Warning: Could not connect to request server: {e}", fg='yellow')
+            self.req_client = None
+    
     def use_id(self, sidepit_id) -> None:
         self.sidepit_id = sidepit_id
         # print("using id", sidepit_id)
@@ -26,13 +48,13 @@ class SidepitManager:
    
     def update_balance(self):
         try:
-            url =  SIDEPIT_API_URL + "request_position/" + self.sidepit_id
-            response = requests.get(url)
-            if response.status_code != 200:
-                click.secho(f"Error getting locked balance: {response.text}", fg='red')
-                return
-            
-            self.get_positions_json = response.json()
+            # Use protobuf client - store protobuf object
+            self.positions_data = self.req_client.get_positions(self.sidepit_id)
+            # For compatibility with existing code that needs JSON
+            from google.protobuf.json_format import MessageToDict
+            self.get_positions_json = MessageToDict(self.positions_data, 
+                                                    preserving_proto_field_name=True,
+                                                    including_default_value_fields=True)
             self.terminal.new_data(self.get_positions_json)
 
             tx_arr=[int(tx['lock_sats']) for tx in self.get_positions_json['locks'] if tx['is_pending']]
@@ -42,7 +64,18 @@ class SidepitManager:
             if self.accountstate is not None: 
                 self.available_balance = int(self.accountstate['available_balance'])
                 self.net_locked = int(self.accountstate['net_locked'])
-                self.positions = self.accountstate['positions']
+                
+                # Extract positions from new nested structure
+                self.positions = {}
+                contract_margins = self.accountstate.get('contract_margins', {})
+                for symbol, contract_margin in contract_margins.items():
+                    ticker_positions = contract_margin.get('positions', {})
+                    for ticker, ticker_pos_data in ticker_positions.items():
+                        position_data = ticker_pos_data.get('position', {})
+                        self.positions[ticker] = {
+                            'position': position_data.get('position', 0),
+                            'avg_price': position_data.get('avg_price', 0.0)
+                        }
 
 
                 if self.DEBUG:
@@ -78,7 +111,7 @@ class SidepitManager:
         if pretty:
             self.terminal.display_trader_info()
             self.terminal.create_account_table()
-            self.terminal.display_positions()
+            self.terminal.display_positions(self.active_ticker)
             return
 
         print("Positions:")
@@ -294,23 +327,60 @@ class SidepitManager:
         # filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
         # print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
 
-    def print_quote(self): 
-        self.quotron.display(self.get_api("quote"))
+    def print_quote(self):
+        quote_pb = self.req_client.get_quote(self.active_ticker)
+        self.quotron.display(quote_pb)
 
-    def print_last(self): 
-        self.quotron.display(self.get_api("quote"), True)
-
-    def print_product(self): 
-        self.quotron.display_product(self.get_api("active_product"))
-
-    def get_api(self, api): 
-        url =  SIDEPIT_API_URL + api + "/"
-        response = requests.get(url)
-        if response.status_code != 200:
-            click.secho(f"Error getting quote: {response.text}", fg='red')
+    def print_last(self):
+        quote_pb = self.req_client.get_quote(self.active_ticker)
+        self.quotron.display(quote_pb, last_only=True)
+    
+    def list_tickers(self):
+        """Display available tickers from schedule"""
+        if not self.available_tickers:
+            click.secho("No tickers available. Call print_product first.", fg='yellow')
             return
+        click.secho("\nAvailable Tickers:", fg='cyan')
+        for i, ticker in enumerate(self.available_tickers, 1):
+            marker = "[CURRENT]" if ticker == self.active_ticker else ""
+            click.secho(f"  {i}. {ticker} {marker}", fg='green' if marker else 'white')
+    
+    def switch_ticker(self, ticker_or_index):
+        """Switch to a different ticker by name or number"""
+        # Try to parse as numeric index
+        try:
+            index = int(ticker_or_index) - 1  # Convert 1-based to 0-based
+            if 0 <= index < len(self.available_tickers):
+                ticker = self.available_tickers[index]
+            else:
+                click.secho(f"Invalid ticker number. Choose 1-{len(self.available_tickers)}", fg='red')
+                return False
+        except ValueError:
+            # Not a number, treat as ticker name
+            ticker = ticker_or_index
         
-        return response.json()
+        if ticker not in self.available_tickers:
+            click.secho(f"Ticker {ticker} not available in schedule", fg='red')
+            return False
+        self.active_ticker = ticker
+        click.secho(f"Switched to ticker: {ticker}", fg='green')
+        return True
+
+    def print_product(self):
+        product_pb = self.req_client.get_active_product(self.active_ticker)
+        # Extract and store active ticker from product
+        if product_pb.active_contract_product.product.ticker:
+            self.active_ticker = product_pb.active_contract_product.product.ticker
+        # Extract available tickers from schedule
+        if product_pb.exchange_status.session.schedule.product:
+            self.available_tickers = list(product_pb.exchange_status.session.schedule.product)
+        # Store exchange status
+        self.exchange_status = product_pb.exchange_status.status.estate
+        self.quotron.display_product(product_pb)
+
+    def is_exchange_open(self):
+        """Check if exchange is open (status = 2 = EXCHANGE_OPEN)"""
+        return self.exchange_status == 2
 
     def active(self) -> bool:
         return self.pnding_locked_balance > 0 or self.available_balance != 0 or self.net_locked > 0 

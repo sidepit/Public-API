@@ -34,6 +34,7 @@ class SidepitIDManager:
         files = os.listdir(self.FOLDER_WALLETS_PATH) #if self.FOLDER_WALLETS_PATH.exists() else []
         self.wallet_file_path = self.FOLDER_WALLETS_PATH / files[0] if files else ""
         self.active_wallet = files[0] if files else ""
+        self.watch_only_id = None  # For watch-only mode without private key
 
     def have_folder(self) ->bool:
         return self.FOLDER_WALLETS_PATH.exists()
@@ -42,11 +43,25 @@ class SidepitIDManager:
         os.makedirs(self.FOLDER_WALLETS_PATH)
 
     def have_id(self) -> bool: 
-        return bool(self.wallet_file_path)
+        return bool(self.wallet_file_path) or bool(self.watch_only_id)
+    
+    def is_watch_only(self) -> bool:
+        """Check if current ID is watch-only (no private key)"""
+        return bool(self.watch_only_id) and not bool(self.wallet_file_path)
     
     def get_id(self) -> str:
+        if self.watch_only_id:
+            return self.watch_only_id
         self.btcaddress = self.load_sidepit_id()
-        return self.btcaddress 
+        return self.btcaddress
+    
+    def set_watch_only_id(self, trader_id: str) -> None:
+        """Set a watch-only trader ID without needing private key"""
+        # Basic validation - should be a bech32 address
+        if not trader_id.startswith('bc1'):
+            raise ValueError("Invalid trader ID format. Should start with 'bc1'")
+        self.watch_only_id = trader_id
+        self.wallet_file_path = ""  # Clear wallet path for watch-only mode 
 
     def create_sidepit_id(self) -> None:
         privkey = PrivateKey(secrets.token_bytes(32))
@@ -67,14 +82,20 @@ class SidepitIDManager:
     def verify_wif(self, wif):
         PrivateKey(self.wif_to_private_key(wif), False)
 
-    def read_wif(self) -> str: 
+    def read_wif(self) -> str:
+        if self.is_watch_only():
+            raise RuntimeError("Cannot access private key in watch-only mode")
         with open(self.wallet_file_path, "r") as sp_wallet:
             return sp_wallet.read()
     
     def wif(self) -> str:
+        if self.is_watch_only():
+            raise RuntimeError("Cannot access WIF in watch-only mode")
         return self.read_wif().strip()
 
     def load_sidepit_id(self) -> str:
+        if self.is_watch_only():
+            return self.watch_only_id
         wif_content = self.read_wif()
         pk_hex = self.wif_to_private_key(wif_content) # might need to use compressed in the future..
         return self.toSegwit0Address(pk_hex)
@@ -151,6 +172,8 @@ class SidepitIDManager:
             click.secho("\n!!!! Error ocurred - wif not imported !!!!!", fg = "bright_red")
     
     def sign_it(self, digest):
+        if self.is_watch_only():
+            raise RuntimeError("Cannot sign transactions in watch-only mode. This ID is read-only.")
         priv = PrivateKey(self.wif_to_private_key(self.wif()), False)
         sig = priv.ecdsa_sign(digest,True)
         return priv.ecdsa_serialize_compact(sig).hex()
