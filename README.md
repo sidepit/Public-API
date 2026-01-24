@@ -1,3 +1,6 @@
+### proof of @sidepitceo
+``'your favorite CEO.```
+
 # Sidepit Python Client
 
 ![Bitcoin Image](images/bitcoin.jpg)
