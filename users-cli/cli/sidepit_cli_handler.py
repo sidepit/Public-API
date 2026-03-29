@@ -80,7 +80,15 @@ class SidepitCLIHandler:
         if self.sidepit_id_manager.is_watch_only():
             click.secho("Cannot cancel orders in watch-only mode. This ID is read-only.", fg='red')
             return
-        self.sidepit_api_trader.do_cancel(oid)
+
+        if oid == "all":
+            self.sidepit_manager.update_balance()
+            for order in self.sidepit_manager.open_orders:
+                click.secho("Trader canceling order id: " + order["orderid"], fg='yellow')
+                self.sidepit_api_trader.do_cancel(order["orderid"])
+        else:
+            click.secho("Trader canceling order id: " + oid, fg='yellow')
+            self.sidepit_api_trader.do_cancel(oid)
 
     def handle_trading_actions(self) -> None:
         self.sidepit_api_trader = SidepitApiClient(self.sidepit_manager, self.sidepit_id_manager) 

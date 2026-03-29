@@ -122,6 +122,17 @@ class SidepitManager:
         for ticker, details in self.positions.items():
             print(f"  {ticker}: Position = {details['position']}, Avg Price = {details['avg_price']}")
 
+    def get_open(self):
+        """Return a list of open orders."""
+        if self.orderfills is None:
+            return []
+        return [
+            value["order"] 
+            for key, value in self.orderfills.items()
+            if int(value["order"]["remaining_qty"]) > 0
+        ]
+
+        
     def print_open(self, pretty = False): 
         if pretty:
             self.terminal.display_order_details("open")

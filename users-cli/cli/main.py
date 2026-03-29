@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 import click
+import signal
+import sys
 from sidepit_cli_handler import SidepitCLIHandler
 
 @click.command()
@@ -40,5 +42,10 @@ def run_sidepit_cli(watch_only) -> None:
 
     return
 
+def shutdown(signal, frame):
+    print("Shutting down...")
+    sys.exit(0)
+
 if __name__ == '__main__':
+    signal.signal(signal.SIGINT, shutdown)
     run_sidepit_cli()
