@@ -296,8 +296,8 @@ The protobuf definitions are in `Public-API-Data/sidepit_api.proto`.
 
 Questions? Issues?
 
-- Jay: jay@sidepit.com
-- Telegram: t.me/sidepitceo
+- Jay: jb at sidepit.com
+- Telegram: [t.me/sidepitceo](https://t.me/sidepit2)
 - GitHub Issues: https://github.com/sidepit/Public-API/issues
 
 ---

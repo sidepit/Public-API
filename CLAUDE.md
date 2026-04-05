@@ -94,4 +94,3 @@ Read `PROOF_RUN_GUIDE.md` first. Feed it to your LLM for full context.
 - **Repo:** https://github.com/sidepit/Public-API
 - **Docs:** https://docs.sidepit.com/
 - **Web UI:** https://app.sidepit.com/trading-view (code: `sidepit2025`)
-- **Proof Run Memo:** https://spiky-elephant-06d.notion.site/Sidepit-2e8fd3f03fea8050b8f2cc7959b42f76
