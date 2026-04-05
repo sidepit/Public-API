@@ -122,22 +122,25 @@ class SidepitManager:
         for ticker, details in self.positions.items():
             print(f"  {ticker}: Position = {details['position']}, Avg Price = {details['avg_price']}")
 
-    def get_open(self):
+    def get_open_order_ids(self):
         """Return a list of open orders."""
         if self.orderfills is None:
             return []
         return [
-            value["order"] 
+            value["order"]["orderid"] 
             for key, value in self.orderfills.items()
             if int(value["order"]["remaining_qty"]) > 0
         ]
 
-        
+
     def print_open(self, pretty = False): 
         if pretty:
             self.terminal.display_order_details("open")
             return
 
+        ####
+        table = Table(title="Open Orders", header_style="bold cyan")
+        ####
         rows = []
         for key, data in self.orderfills.items():
             if int(data["order"]["remaining_qty"]) == 0:
@@ -183,19 +186,49 @@ class SidepitManager:
 
         headers = ["Ticker", "Side", "Price", "Size", "Remaining", "Filled", "Avg Price", "Canceled", "Pass Fills", "Agres Fills", "Agres Avg", "Order ID", "Time"]
 
+
+        ######
+        new_to_keep = []
+        for i in range(len(headers)):
+            for row in rows:
+                if row[i]:
+                    new_to_keep.append(i) 
+                    break 
+        ######
+
         # Identify columns to keep (i.e., columns with at least one non-empty value)
         columns_to_keep = [i for i in range(len(headers)) if any(row[i] for row in rows)]
 
+       ##########
+        for i in columns_to_keep:
+            table.add_column(headers[i], style="yellow", overflow="fold")
+        #########
         # Filter headers and rows to keep only non-empty columns
         filtered_headers = [headers[i] for i in columns_to_keep]
-        filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
 
-        print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
+        #############
+        for row in rows:
+            filtered_row = []
+            for i in columns_to_keep:
+                filtered_row.append(str(row[i]))
+            table.add_row(*filtered_row)
+        #############
+        Console().print(table)
+
+        # Filter headers and rows to keep only non-empty columns
+        # filtered_headers = [headers[i] for i in columns_to_keep]
+        # filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
+
+        # print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
 
     def print_filled(self, pretty = False): 
         if pretty:
             self.terminal.display_order_details("filled")
             return
+
+        ####
+        table = Table(title="Filled Orders", header_style="bold cyan")
+        ####
 
         rows = []
         for key, data in self.orderfills.items():
@@ -241,15 +274,39 @@ class SidepitManager:
                 ])
 
         headers = ["Ticker", "Side", "Price", "Size", "Remaining", "Filled", "Avg Price", "Canceled", "Pass Fills", "Agres Fills", "Agres Avg", "Order ID", "Time"]
+        ######
+        new_to_keep = []
+        for i in range(len(headers)):
+            for row in rows:
+                if row[i]:
+                    new_to_keep.append(i) 
+                    break 
+        ######
 
         # Identify columns to keep (i.e., columns with at least one non-empty value)
         columns_to_keep = [i for i in range(len(headers)) if any(row[i] for row in rows)]
 
+        ##########
+        for i in columns_to_keep:
+            table.add_column(headers[i], style="yellow", overflow="fold")
+        #########
         # Filter headers and rows to keep only non-empty columns
         filtered_headers = [headers[i] for i in columns_to_keep]
-        filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
 
-        print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
+        #############
+        for row in rows:
+            filtered_row = []
+            for i in columns_to_keep:
+                filtered_row.append(str(row[i]))
+            table.add_row(*filtered_row)
+        #############
+        Console().print(table)
+
+        # Filter headers and rows to keep only non-empty columns
+        # filtered_headers = [headers[i] for i in columns_to_keep]
+        # filtered_rows = [[row[i] for i in columns_to_keep] for row in rows]
+
+        # print(tabulate(filtered_rows, headers=filtered_headers, tablefmt="pretty"))
 
     def print_all(self, pretty = False): 
         if pretty:
@@ -313,9 +370,9 @@ class SidepitManager:
                     new_to_keep.append(i) 
                     break 
         ######
+
         # Identify columns to keep (i.e., columns with at least one non-empty value)
         columns_to_keep = [i for i in range(len(headers)) if any(row[i] for row in rows)]
-
 
         ##########
         for i in columns_to_keep:
