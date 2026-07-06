@@ -3,3 +3,7 @@ pynng
 fastapi
 uvicorn
 websockets
+# wallet layer (sidepit_trader/wallet.py)
+secp256k1
+base58
+bitcoinlib   # Bitcoin tx build+sign for forward/lock — the proven lib; do NOT reimplement

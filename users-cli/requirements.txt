@@ -1,13 +1,6 @@
-click
-bech32
-secp256k1
-ripemd-hash
-base58
-bit
-qrcode
-bitcoinlib
-tabulate
-rich
-protobuf==3.20.1
-pycoin
-pynng
+# TUI dependencies (the SDK's own deps live in python-client/requirements.txt;
+# easiest is to install these INTO python-client/.venv and run with it)
+textual>=8.0
+qrcode>=7.0
+# optional — only the LOCK (deposit broadcast) money path needs it:
+# bitcoinlib

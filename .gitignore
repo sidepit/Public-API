@@ -1,6 +1,5 @@
-# Ignore .env and pycache
-
+# env files and caches
 **/.env
 **/__pycache__/
-
 */.venv
+*.egg-info/

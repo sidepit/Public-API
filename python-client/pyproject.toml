@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sidepit"
+version = "0.1.0"
+description = "The official Python SDK for Sidepit — Bitcoin-margined forwards, one-second batch auctions."
+readme = "sidepit_trader/README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "protobuf==3.20.1",
+    "pynng",
+    "secp256k1",
+    "base58",
+]
+
+[project.optional-dependencies]
+# only the deposit-forwarding (lock) money path needs it
+lock = ["bitcoinlib"]
+
+[project.urls]
+Homepage = "https://sidepit.com"
+Documentation = "https://docs.sidepit.com"
+Source = "https://github.com/sidepit/Public-API"
+
+[tool.setuptools]
+packages = ["sidepit_trader", "sidepit_trader.examples"]
+
+[tool.setuptools.package-data]
+sidepit_trader = ["data/*.txt"]
