@@ -1,230 +1,269 @@
 ---
 name: sidepit-trade
-description: Trade on Sidepit (Bitcoin-margined forwards, one-second batch auctions) from this repo — read the market keylessly, place and cancel orders with a funded key, check positions, and exit. Use when asked to trade, quote, or manage a Sidepit account.
+description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate: read the live dated forward, preview exposure and published margin allowance, require explicit confirmation, place or cancel an order, reconcile the outcome, resume later, and flatten safely. Use after sidepit-locals has completed onboarding."
 ---
 
-# sidepit-trade
+# Sidepit Trade — the agent enters the pit
 
-Drive the Sidepit exchange from a clone of this repo. No pip package needed —
-everything runs from the repo. Real venue, real Bitcoin: follow the steps in
-order and STOP where a check fails.
+You need an ACTIVE delegate key. If you do not have one, run the
+`sidepit-locals` skill first.
 
-Paths below assume the repo root. Python 3.10+.
+This is real mainnet Bitcoin and a real exchange. The agent loads only a
+protected, trading-only key. It refuses an account key. No live order is sent
+until the human sees a specific preview and replies `CONFIRM <preview-id>`.
+Order, preview, attempt, and result records survive a fresh shell.
 
-## 1. Setup (once per machine)
+In the first 30 seconds, know the product:
+
+- Sidepit trades dated Bitcoin-margined **forwards**, not perpetuals.
+- One-second batch auctions remove speed priority inside the batch: best price
+  wins, not the fastest machine.
+- Prices are inverse, in satoshis per USD: `USD/BTC = 100,000,000 / price`.
+  A satoshi, or sat, is one hundred-millionth of a Bitcoin.
+- BUY adds a synthetic USD hedge and reduces BTC-price exposure. SELL removes
+  that hedge and increases BTC exposure; a negative position is leveraged long
+  BTC.
+- The delegate can trade and cancel. It cannot withdraw, authorize, or revoke.
+
+Read the paired [acceptance test](ACCEPTANCE.md) before a first live order.
+Paths below assume the Public-API repository root and Python 3.10+.
+
+## 1. Prove the toolchain
 
 ```sh
 python3 -m venv python-client/.venv
 python-client/.venv/bin/pip install -r python-client/requirements.txt
-```
-
-Verify the toolchain — this needs no network beyond pip:
-
-```sh
 python-client/.venv/bin/python -m pytest python-client/tests -q
 ```
 
-Expected output ends with: `27 passed` (warnings are fine).
-**STOP if any test fails** — report the failure; do not trade.
+Expected: all tests pass with zero failures. Warnings are acceptable. If any
+test fails, STOP and report the failing test; do not trade.
 
-## 2. Read the market (no keys)
-
-```sh
-python-client/.venv/bin/python examples/quickstart.py
-```
-
-Expected shape (live values vary):
-
-```
-exchange EXCHANGE_OPEN · session 1783296000000 · active contract USDBTCU26
-bid 3x1555 · ask 1556x3 · last 1572 (~$63,613/BTC)
-prices are sats-per-USD: USD/BTC = 1e8 / price
-bar O1556 H1556 L1556 C1556 v0
-...
-```
-
-- Note the **active contract ticker** (here `USDBTCU26`) — use it everywhere
-  below; never hardcode a remembered ticker.
-- If the state is not `EXCHANGE_OPEN`: the market is closed. Reads work;
-  orders wait for the open (schedule via `RequestClient.schedules()`).
-  **STOP here if the task needs a fill now.**
-- If the script cannot connect at all, report it and STOP.
-- This skill assumes a RUNNING venue (default `api.sidepit.com`;
-  `SIDEPIT_HOST` points elsewhere). It never bootstraps or configures an
-  exchange — if your environment requires a local venue, the venue operator
-  provides it ready-to-join.
-
-## 3. Credentials (env)
-
-Trading needs a funded identity in env. Two modes — both use the same two
-variables:
-
-- **Direct** (the key is the account): `SIDEPIT_WIF=<wif>` and optionally
-  `SIDEPIT_ID=<its own bc1q address>`.
-- **Delegate** (recommended for agents — the key trades a customer's account
-  but can never withdraw): `SIDEPIT_WIF=<agent key>` +
-  `SIDEPIT_ID=<the account's bc1q address>`. When `SIDEPIT_ID` differs from
-  the key's own address, the SDK signs in delegate mode automatically.
-
-Check:
+## 2. Read the live market without a key
 
 ```sh
-test -n "$SIDEPIT_WIF" && echo creds-present || echo creds-missing
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py market
 ```
 
-If `creds-missing`: **STOP and ask the user** for `SIDEPIT_WIF` (+
-`SIDEPIT_ID` for delegate mode). Never invent, print, or log key material.
+Expected: named exchange state, active forward and expiry, quote in sats per
+USD, familiar USD/BTC price, USD exposure per contract, initial and maintenance
+margin, and next open when closed.
 
-No account yet? Mint one and show the user its address to fund:
+If the market is closed, STOP for live execution and rerun this command at the
+printed next-open time. If connection fails, the command identifies permission,
+DNS, refusal, or timeout. An agent sandbox may need permission for
+`api.sidepit.com:12125`.
+
+The command also states a current public-product limitation: the API does not
+publish a pre-trade fee schedule. Before any live preview, the human must obtain
+the exact expected fee from current Sidepit terms or the beta operator. Do not
+guess it and do not turn a past fee into a current claim.
+
+## 3. Prove the saved key is an ACTIVE delegate
+
+Use the absolute file path produced by `sidepit-locals`. Do not source it, read
+it, copy its contents, or place a secret in the command line:
 
 ```sh
-cd python-client && .venv/bin/python -m sidepit_trader.wallet new
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  delegate-status --key-file /absolute/path/to/agent.env
 ```
 
-It prints the new address (`sidepit_id`) and the WIF **once**. Funding rule:
-BTC must **reach this user-controlled address first**, then gets forwarded to
-the exchange (the `users-cli/` TUI's LOCK button does this in one tap). Where
-the BTC originally comes from doesn't matter — a withdrawal from a custodial
-exchange is fine; what matters is that it lands on the user's own address
-before LOCK. Trading works once the deposit is credited.
+Expected: account, agent ID, `delegate ACTIVE`, and the protected path with
+`secret not displayed`. The command rejects a direct account key, a symlink,
+wrong ownership, or any mode other than `0600`.
 
-### Mint a delegate key (for agents)
+If the result is PENDING, wait and rerun the same command. If rejected or
+missing, return to **Authorize trading agent** in the web app. Never submit an
+order until ACTIVE appears in the server's live set.
 
-On an **explicit user request**, an agent may create ONE new delegate key
-bound to the user's account. It must not inspect or modify existing keys.
-One command does the whole contract (secure randomness, unique 0600 file,
-never overwrites, never prints the secret):
+Run one writer per account. A transaction's nanosecond timestamp is the account
+nonce; two concurrent trading processes can collide.
+
+## 4. Resume or inspect from a fresh shell
+
+This is also the “come back tomorrow” command:
 
 ```sh
-cd python-client && .venv/bin/python -m sidepit_trader.agent_key new --account bc1q<the-user's-account>
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  status --key-file /absolute/path/to/agent.env
 ```
 
-Expected output: `pubkey`, `trader_id`, `account`, and the saved file path —
-and **nothing secret**. Reply to the user with only the 66-char compressed
-pubkey (starts `02`/`03`). The ACCOUNT owner then registers that pubkey (TUI
-delegates tab, or `Submitter.register_delegate`); once ACTIVE, trade with
-`SIDEPIT_WIF` sourced from the saved file and `SIDEPIT_ID=<the account>`.
-The delegate can trade only — it can never withdraw, appoint, or revoke.
+It prints the current forward, delegate state, deposits, available and used
+margin, restriction state, positions, complete resting-order snapshot, and
+recent public order handles. It never prints the secret.
 
-## 4. Place an order
+STOP before adding risk if the account is restricted, available margin is not
+enough for the intended order, funding is still pending, an existing order is
+unexplained, or the delegate is not ACTIVE.
 
-Run from `python-client/` with the env set. side: `1` buy / `-1` sell;
-price in sats-per-USD; size in contracts.
+## 5. Ask for the order—never choose it silently
+
+Before constructing a preview, get four choices from the human:
+
+1. BUY or SELL, using the exposure meanings at the top of this skill.
+2. Positive integer contract count. The live market command states the USD
+   amount per contract.
+3. Positive integer limit price in sats per USD. A buy at or above the ask, or
+   sell at or below the bid, is marketable but still waits for the next auction.
+4. Exact expected trading fee in sats and its current source. If unavailable,
+   STOP; the public API cannot supply it yet.
+
+Do not hardcode a side, size, price, ticker, or fee. Do not interpret “do
+something” as permission to choose financial exposure.
+
+## 6. Write the exact preview—nothing is sent
+
+Replace every placeholder with the human's choices and the protected file path:
 
 ```sh
-cd python-client
-.venv/bin/python - <<'EOF'
-from sidepit_trader import signer_from_env, Submitter, RequestClient, pb
-
-req = RequestClient()
-ap = req.active_product()
-assert ap.exchange_status.status.estate == pb.EXCHANGE_OPEN, "market not open"
-ticker = ap.active_contract_product.product.ticker
-q = req.quote(ticker).quote
-print(f"{ticker} bid={q.bid} ask={q.ask} last={q.last}")
-
-sub = Submitter(signer_from_env(), "api.sidepit.com")
-orderid = sub.new_order(side=1, size=1, price=q.bid, ticker=ticker)  # joins the bid
-print("orderid:", orderid)
-EOF
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  preview-order \
+  --key-file /absolute/path/to/agent.env \
+  --side HUMAN_CHOICE_LOWERCASE \
+  --contracts INTEGER \
+  --limit-price SATS_PER_USD \
+  --fee-sats INTEGER \
+  --fee-source "CURRENT_SOURCE_AND_DATE"
 ```
 
-Expected: the quote line, then `orderid: bc1q...:<19-digit nanoseconds>`.
-That full string is THE handle — keep it; it identifies the order on every
-feed. A successful send means **queued**: the order resolves at the next
-1-second auction; there is no synchronous ack.
+`HUMAN_CHOICE_LOWERCASE` must be exactly `buy` or `sell`; it is never chosen by
+the agent. All other capitalized words are placeholders, not literal values.
 
-For an immediate fill use a marketable limit instead:
-`sub.market_order(side=1, size=1, ticker=ticker, bid=q.bid, ask=q.ask,
-last=q.last)` — returns `(orderid, price)`.
+The preview contains:
 
-## 5. Check the account (point-in-time)
+- active dated forward and exact limit in sats per USD plus USD/BTC;
+- contract count, USD notional, and BTC-equivalent notional at the limit;
+- plain-language BUY/SELL exposure and projected position;
+- current margin used, additional initial-margin allowance, and available margin;
+- numeric fee with its human-supplied current source;
+- RESTING or MARKETABLE expectation and the one-second auction caveat;
+- a public preview file and unique preview ID.
 
-Wait ~3 seconds (one auction plus margin), then:
+Return the entire preview to the human. Wait. Only the exact reply
+`CONFIRM <preview-id>` authorizes that preview. “Yes,” an old confirmation, or a
+changed side/size/price/fee does not. To change anything, create a new preview.
+
+## 7. Send only the confirmed preview
+
+After the exact confirmation, use the printed preview file and confirmation:
 
 ```sh
-cd python-client
-.venv/bin/python - <<'EOF'
-import os
-from sidepit_trader import RequestClient, signer_from_env
-
-sid = os.environ.get("SIDEPIT_ID") or signer_from_env().sidepit_id
-tp = RequestClient().positions(sid)
-a = tp.accountstate
-print(f"available_margin={a.available_margin} available_balance={a.available_balance}")
-for symbol, cm in a.contract_margins.items():
-    for ticker, tpos in cm.positions.items():
-        print(f"{ticker}: position={tpos.position.position:+d} avg={tpos.position.avg_price:.2f}")
-for oid, of in tp.orderfills.items():
-    bo = of.order
-    print(f"{oid[-22:]} side={bo.side:+d} price={bo.price} "
-          f"filled={bo.filled_qty} remaining={bo.remaining_qty}")
-EOF
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  send-order \
+  --key-file /absolute/path/to/agent.env \
+  --preview-file /absolute/path/to/order-preview-ID.json \
+  --confirm "CONFIRM PREVIEW_ID"
 ```
 
-Expected: your orderid appears in the order list with `remaining` > 0
-(resting) or `filled` > 0 (filled). This reqrep read is point-in-time — the
-right tool right after an order. A continuously running bot listens to the
-feeds instead (see `sidepit_trader/trader.py`).
+The command rechecks ACTIVE state, market open, active forward, position,
+available margin, preview expiry, and rest-or-cross expectation. It writes the
+public order handle to an attempt record **before** the network send, subscribes
+to rejections before sending, then reports one of:
 
-If the order is absent AND all numbers are zero: the account is unfunded or
-the wrong `SIDEPIT_ID` is set — **STOP and re-check step 3**. Rejections
-stream on port 12128 with named codes; `RC_MARGIN` means insufficient margin
-(fund the account or reduce size); `RC_ID` in delegate mode means the
-delegate is not registered.
+- `RESTING` — visible with remaining quantity;
+- `FILLED` — filled quantity and average price;
+- `REJECTED — RC_NAME` — use the recovery map below;
+- `UNKNOWN` — do not retry; run status using the persisted order handle.
 
-## 6. Cancel / go flat
+`QUEUED` means the bytes were sent to the one-second auction. It is not a fill.
 
-Cancel one order (from step 4's handle):
+## 8. Cancel from a fresh shell
 
-```python
-sub.cancel(orderid)          # queued like everything else; confirm in step 5
-```
-
-Cancel everything and close the position — the one-command exit:
+First show the human the full public order ID and ask for the exact phrase
+`CANCEL <order-id>`. After that confirmation:
 
 ```sh
-cd python-client && SIDEPIT_ID=... SIDEPIT_WIF=... .venv/bin/python -m sidepit_trader.flatten
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  cancel \
+  --key-file /absolute/path/to/agent.env \
+  --order-id 'bc1qACCOUNT:TIMESTAMP' \
+  --confirm 'CANCEL bc1qACCOUNT:TIMESTAMP'
 ```
 
-Expected final line: `flatten OK: positions={} open_orders=0`.
-If it prints `INCOMPLETE`, run it once more; report if it persists.
+The cancel is also queued. `RC_CDUP` or `RC_CREJ` normally means the order was
+already filled or gone. Run status to learn the resulting position before any
+replacement order.
 
-## 7. Withdraw (advanced — account key only)
+## 9. Preview and flatten all exposure
 
-Withdrawal returns BTC to the account's own `sidepit_id` address; there is no
-destination to choose. Requires the ACCOUNT key (a delegate signer raises
-`CourierRuleError` — that is the permission model working):
+Flatten cancels every resting order first, then closes remaining positions with
+marketable limits. Obtain the exact expected total trading fee, then preview:
 
-```python
-from sidepit_trader import signer_from_env, Submitter, RequestClient
-signer = signer_from_env()
-sub = Submitter(signer, "api.sidepit.com")
-sub.unlock()                                   # everything withdrawable (MAX)
-print(RequestClient().unlock_records(signer.sidepit_id))
+```sh
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  preview-flatten \
+  --key-file /absolute/path/to/agent.env \
+  --fee-sats INTEGER \
+  --fee-source "CURRENT_SOURCE_AND_DATE"
 ```
 
-Lifecycle: `UNLOCK_PENDING → UNLOCK_RESERVED → UNLOCK_PROCESSING →
-UNLOCK_COMPLETED` (a rejected request shows as `UNLOCK_REJECTED` in the same
-records). One open unlock per account at a time. Track
-`accountstate.pending_unlock` in step 5's read.
+Show the complete cancel/close preview and wait for `CONFIRM <preview-id>`.
+Then:
 
-**Receipts vs truth** (applies to every account verb — delegate, revoke,
-unlock): `RequestClient().account_requests(sid)` returns the receipt history,
-keyed by `oid`. A receipt with `is_pending=True` means **received/displayed
-only** — never infer activation from it. The terminal result lands on the
-SAME oid with `is_pending=False`: `reject_code` `RC_NONE` = applied, non-zero
-= rejected (fields `applied` / `rejected` are precomputed). Settled delegate
-truth is `accountops.delegate_data`; the live routing set is
-`accountstate.active_delegates`. Don't re-submit a verb while its receipt is
-still pending. A door-level intake failure raises `DoorRejectedError` — the
-verb was never queued.
+```sh
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  send-flatten \
+  --key-file /absolute/path/to/agent.env \
+  --preview-file /absolute/path/to/flatten-preview-ID.json \
+  --confirm "CONFIRM PREVIEW_ID"
+```
 
-## Facts to keep straight
+If orders, positions, or crossing conditions changed, it stops rather than
+improvising. Cancels may already be queued; run status and make a fresh preview.
+`INCOMPLETE` also means run status and preview the residual—never blindly retry.
 
-- Prices are **sats-per-USD**; `USD/BTC = 1e8 / price`. A Sidepit high is the
-  USD low.
-- Feeds interleave every product — always filter by ticker.
-- The ns timestamp is the account's nonce: one trading process per account.
-- reqrep = point-in-time; feeds = continuous. Both are yours.
-- Never print or log `SIDEPIT_WIF`, a mnemonic, or a private key. Anywhere.
+## Recovery map
+
+- **Closed:** run `sidepit_agent.py market`; use its next-open time.
+- **Funding pending or zero:** run `sidepit_agent.py public-account --account
+  bc1qACCOUNT`; wait for credited funds or inspect the public Bitcoin TXID.
+- **Delegate pending:** rerun `delegate-status`; submitted is not ACTIVE.
+- **`RC_MARGIN`:** run status; reduce size or add deliberate funding.
+- **`RC_ID`:** the account or delegate is unknown; rerun `delegate-status`.
+- **`RC_DK`:** the forward is no longer active; rerun market and re-preview.
+- **`RC_VERIFY`, `RC_BAD`, `RC_DUP`:** STOP; preserve the attempt record and
+  report the named code plus public order ID.
+- **Order absent/UNKNOWN:** run status. Never create a second order for the same
+  intent until the first public handle is resolved.
+- **Network failure after send:** treat the outcome as unknown. The attempt
+  record is the recovery anchor; never infer failure and resend.
+
+## Operating reference
+
+- **Fees:** realized fees are published after trading, but the current public
+  API has no pre-trade schedule. The preview requires a numeric fee and current
+  human-verified source. This is a product gap, not permission to estimate.
+- **Margin:** the active contract publishes initial and maintenance margin per
+  contract. The server publishes current used/available margin and is the final
+  order check. Restricted accounts reduce risk only. Open P&L and margin move
+  with the market; start small. The current public API does not publish the
+  complete margin-stress or forced-reduction policy, so obtain current beta
+  terms before adding risk.
+- **Deposits:** LOCK forwards the connected address's whole confirmed balance,
+  minus the Bitcoin network fee. Credit follows chain confirmation; `pending`
+  is not available margin. No fixed confirmation count or time is promised.
+- **Daily settlement:** open P&L settles into the BTC balance and average entry
+  resets. `available_balance` is the last settled figure;
+  `available_margin` is what can be used now.
+- **Expiry/roll:** these are dated forwards. Always use the currently active
+  ticker and printed expiry; never reuse yesterday's ticker. Flatten or obtain
+  an explicit roll instruction before expiry.
+- **Trade history:** status shows recent orders; the durable files in
+  `~/.sidepit/agent-trade/` preserve previews, attempts, results, and handles.
+- **Unlock/revoke:** the agent cannot perform either action. The human uses the
+  web app. Unlock requests return only to the same account address and the UI
+  tracks received, reserved, processing, completed, or rejected. No completion
+  time is promised; never resubmit while pending.
+- **Support:** provide only public account, agent, order, receipt, and Bitcoin
+  transaction IDs to the Sidepit beta operator. Never provide a key, seed
+  words, or key-file contents.
+
+## Protocol facts for client builders
+
+- Feeds mix products; filter every message by ticker.
+- Drain order data through `more_in_epoch == 0` before acting on the book.
+- Request/reply is point-in-time; feeds are continuous. Reconnect and snapshot
+  before trusting remembered open orders.
+- A Sidepit price high is a familiar USD/BTC low because the quote is inverse.
+- Keep one writer per account and never reuse a timestamp nonce.

@@ -1,6 +1,6 @@
 ---
 name: sidepit-trade
-description: Trade on Sidepit (Bitcoin-margined forwards, one-second batch auctions) from this repo — read the market keylessly, mint a delegate key, place and cancel orders with a funded key, check positions, and exit. Use when asked to trade, quote, onboard, or manage a Sidepit account.
+description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate — read the live dated forward, preview exposure and published margin allowance, require explicit confirmation, place or cancel, reconcile, resume, and flatten. Use after sidepit-locals onboarding."
 ---
 
 # sidepit-trade (discovery stub)

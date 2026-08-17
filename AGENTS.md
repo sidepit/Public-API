@@ -1,9 +1,27 @@
 # AGENTS.md — Sidepit, for AI agents
 
-The first file an agent should read. Self-contained: orient, connect, read the
-market, sign, submit, confirm. The full message reference is
-`Public-API-Data/sidepit_api.proto`; a guided walkthrough with exact commands
-is `skills/sidepit-trade/SKILL.md`.
+The first file an agent should read. The customer journey is deliberately split:
+`skills/sidepit-locals/SKILL.md` helps the human create/fund the account and
+authorize a restricted agent; `skills/sidepit-trade/SKILL.md` trades only after
+that agent is ACTIVE. The full wire reference is
+`Public-API-Data/sidepit_api.proto`.
+
+**Customer safety boundary:** never ask for, display, source, or accept the
+human's account key or seed words. The human signs account actions inside
+UniSat. An agent uses only its own 0600 trading-only key file, which the
+protocol prevents from withdrawing, authorizing, or revoking.
+
+**Funding boundary:** never tell a customer to send BTC from an external wallet
+or exchange directly to the exchange deposit/lock address. BTC goes to the
+customer’s connected `bc1q` Sidepit ID first; only then does the human use LOCK
+to forward that balance. Any instruction that skips the Sidepit-ID step is
+stale and unsafe.
+
+This is an identity requirement, not only a wallet-UI preference. The exchange
+identifies and credits the account from the LOCK transaction input: it must
+spend from the customer's Sidepit ID, whose public key is recovered from the
+witness. A direct external-wallet-to-lock-address payment does not identify the
+intended Sidepit account.
 
 ## What is Sidepit?
 
@@ -70,9 +88,10 @@ Runnable: `python examples/quickstart.py` from the repo root — no keys needed.
 
 - An identity is a secp256k1 private key. `sidepit_id` = the P2WPKH bech32
   address (`bc1q…`) derived from the compressed pubkey. That address is the
-  account: it receives the deposit and it signs the orders.
-- Mint one locally: `python -m sidepit_trader.wallet new` (key never leaves
-  the machine). Library: `wallet.gen_key()`, `from_wif()`, `from_mnemonic()`.
+  account. In the customer path, the account key stays inside UniSat.
+- An agent mints only a distinct restricted identity with
+  `python -m sidepit_trader.agent_key new --account bc1q…`. It writes one new
+  0600 file, prints only public facts, and never overwrites an existing key.
 - **Signing, exactly** (`sidepit_trader/signer.py`):
   1. stamp `tx.sidepit_id` (and `tx.agent_id` in delegate mode),
   2. `digest = SHA256(tx.SerializeToString())`,
@@ -86,29 +105,30 @@ Runnable: `python examples/quickstart.py` from the repo root — no keys needed.
   (`BookOrder.orderid`, `FillData.agressiveid/passiveid`, rejects). The SDK's
   order verbs return this full string.
 
-**Delegation (recommended for agents):** the account key registers an agent
-key once — `Submitter.register_delegate(delegate_pubkey=<33-byte hex>)`, the
-agent's address is derived from the pubkey — then the agent trades with
-`Signer.as_delegate(agent_priv_hex, account_bc1q)`. On the wire that stamps
-`sidepit_id` = the account (whose margin) and `agent_id` = the agent (who
-signed). The agent key can trade but can never withdraw, appoint, or revoke —
-those verbs are account-key-only, and the SDK raises `CourierRuleError` if a
-delegate tries. Env handoff: `SIDEPIT_WIF=<agent key> SIDEPIT_ID=<account>` →
-`signer_from_env()` does the right thing.
+**Delegation is mandatory for customer-facing agents.** The human pastes the
+agent's 33-byte public key into **Authorize trading agent** in the web app and
+signs in UniSat. The agent waits until `accountstate.active_delegates` contains
+its derived address. On the wire, delegate signing stamps `sidepit_id` = whose
+margin and `agent_id` = who signed. A delegate can trade but cannot withdraw,
+authorize, or revoke; the SDK raises `CourierRuleError` before such a send and
+the server enforces the same boundary.
 
 ## Submit an order
 
-```python
-from sidepit_trader import signer_from_env, Submitter
-sub = Submitter(signer_from_env(), "api.sidepit.com")
-orderid = sub.new_order(side=1, size=1, price=1555, ticker="USDBTCU26")
-# side: 1 buy / -1 sell · size: contracts · price: sats-per-USD · returns the handle
-```
+Do not place a customer order from a literal code sample. Use the bundled
+delegate-only gate in `skills/sidepit-trade/scripts/sidepit_agent.py`:
 
-Other verbs: `sub.cancel(orderid)`, `sub.cancel_replace(orderid, price)`
-(price-only; returns the replacement's orderid), `sub.market_order(...)`
-(there is no native market type — it places a marketable limit crossed
-through the touch).
+1. `preview-order` derives the active ticker and shows exact side/exposure,
+   limit in both price conventions, projected position, margin, numeric fee,
+   and whether the order currently rests or crosses.
+2. The human replies `CONFIRM <preview-id>`.
+3. `send-order` revalidates the preview, writes the public handle durably, then
+   signs and submits with the ACTIVE delegate file.
+
+Low-level SDK verbs remain `Submitter.new_order`, `cancel`, `cancel_replace`,
+and `market_order`. There is no native market type: `market_order` places a
+marketable limit crossed through the touch. Client builders must add the same
+preview and explicit-confirmation boundary before exposing them to users.
 
 A successful send means **queued**: the order resolves at the next 1-second
 auction. Outcomes arrive on the feeds — fills and book updates on 12124,
@@ -139,16 +159,15 @@ Balances: `available_balance` is yesterday's settled figure (static intraday);
 client-side from positions + `avg_price` + the current mark; at daily
 settlement it folds into the balance and `avg_price` resets.
 
-## Withdraw (advanced)
+## Withdraw (human web action)
 
-`Submitter.unlock()` sends a signed `UnlockRequest` through the 12125 door
-(account verbs ride `RequestReply.account_tx` with the `UNLOCK`/`DELEGATE`
-mask, sent alone). Funds return **only** to `sidepit_id` — there is no
-destination field. Applies live in-session; lifecycle `PENDING → RESERVED →
-PROCESSING → COMPLETED`, tracked in `accountstate.pending_unlock`; a rejected
-unlock is stored as an `UNLOCK_REJECTED` record —
-`RequestClient.unlock_records(sidepit_id)` shows the verdict. One open unlock
-per account at a time.
+An agent never performs this action. The human chooses **Sidepit Account →
+Unlock funds** in the web app, enters integer sats or MAX, confirms the same
+account ID, and signs inside UniSat. Funds return **only** to `sidepit_id`;
+there is no destination field. The UI tracks received, reserved, processing,
+completed, or rejected and shows the Bitcoin transaction ID when available.
+On the public wire, the corresponding records are
+`accountstate.pending_unlock` and `RequestClient.unlock_records(sidepit_id)`.
 
 ## Rejects (12128)
 
@@ -157,8 +176,9 @@ Surface the code **name**, never the bare int:
 normal traffic (the order was already filled or gone). The ones that mean
 something: `RC_VERIFY` (bad signature bytes), `RC_DUP` (reused timestamp),
 `RC_ID` (unknown account / delegate not registered), `RC_BAD` (malformed),
-`RC_MARGIN` (insufficient margin — the server is the margin check; send and
-let it answer), `RC_DK` (unknown ticker — query `ACTIVE_PRODUCT`).
+`RC_MARGIN` (insufficient margin — the server is the final margin check;
+re-preview with less risk or fund deliberately), `RC_DK` (unknown ticker —
+query `ACTIVE_PRODUCT`).
 SDK: `RejectionFeed.code_name(rej)` / `is_error(rej)`.
 
 ## Exchange states
@@ -185,12 +205,13 @@ schedule comes from `ACTIVE_PRODUCT` / `SCHEDULES`.
 ## The lifecycle in commands
 
 ```sh
-cd python-client
-python -m sidepit_trader.wallet new                 # 1. mint key → sidepit_id (fund it)
-python sidepit_trader/examples/hello_market_data.py # 2. read the market (keyless)
-SIDEPIT_ID=... SIDEPIT_WIF=... python sidepit_trader/examples/hello_taker.py  # 3. trade
-SIDEPIT_ID=... SIDEPIT_WIF=... python -m sidepit_trader.flatten   # 4. cancel all + go flat
-# 5. Submitter.unlock() → BTC returns to your address
+python-client/.venv/bin/python examples/quickstart.py
+# Need an account or ACTIVE delegate? Follow skills/sidepit-locals/SKILL.md.
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py market
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  status --key-file /absolute/path/to/agent.env
+# Preview/confirm/send and preview/confirm/flatten: follow sidepit-trade/SKILL.md.
+# Unlock/revoke stay in the human web app.
 ```
 
 Tests (no network): `python-client/.venv/bin/python -m pytest python-client/tests -q`.
