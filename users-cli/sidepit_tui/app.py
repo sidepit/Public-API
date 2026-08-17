@@ -481,12 +481,22 @@ class SidepitApp(App):
             qrw.update(qr_unicode(s.address))
             qrw._qr_done = True
         self._update_fund_buttons(s)
-        self._q("#fund-state", Static).update(
+        ulines = [
             f"equity {btc(equity)} (${eq_usd:,.2f}) · withdrawable now "
-            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}\n"
-            f"[{DIM}]unlock lifecycle: PENDING → RESERVED (margin debited) → "
-            f"COMPLETED (BTC arrives at your address) · one open unlock per "
-            f"account · rejected unlocks appear in the unlock records[/]")
+            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}",
+            f"[{DIM}]unlock lifecycle: RESERVED (margin debited) → PROCESSING "
+            f"(BTC broadcast) → COMPLETED — or REJECTED · one open unlock per "
+            f"account[/]"]
+        for u in s.unlock_records[-5:]:
+            st = u["status_name"].removeprefix("UNLOCK_")
+            c = (GREEN if st == "COMPLETED" else RED if st == "REJECTED" else GOLD)
+            row = (f"[{c}]{st}[/] {btc(u['amount_sats'])}"
+                   f" [{DIM}]{u['oid'][-14:]}[/]")
+            if u["btc_txid"]:
+                row += (f" [link=https://mempool.space/tx/{u['btc_txid']}]"
+                        f"mempool.space/tx/{u['btc_txid'][:12]}…[/link]")
+            ulines.append(row)
+        self._q("#fund-state", Static).update("\n".join(ulines))
         dt = self._q("#delegates", DataTable)
         dt.clear()
         for d in s.delegates:

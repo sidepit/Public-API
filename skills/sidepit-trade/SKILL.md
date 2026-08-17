@@ -185,6 +185,17 @@ UNLOCK_COMPLETED` (a rejected request shows as `UNLOCK_REJECTED` in the same
 records). One open unlock per account at a time. Track
 `accountstate.pending_unlock` in step 5's read.
 
+**Receipts vs truth** (applies to every account verb — delegate, revoke,
+unlock): `RequestClient().account_requests(sid)` returns the receipt history,
+keyed by `oid`. A receipt with `is_pending=True` means **received/displayed
+only** — never infer activation from it. The terminal result lands on the
+SAME oid with `is_pending=False`: `reject_code` `RC_NONE` = applied, non-zero
+= rejected (fields `applied` / `rejected` are precomputed). Settled delegate
+truth is `accountops.delegate_data`; the live routing set is
+`accountstate.active_delegates`. Don't re-submit a verb while its receipt is
+still pending. A door-level intake failure raises `DoorRejectedError` — the
+verb was never queued.
+
 ## Facts to keep straight
 
 - Prices are **sats-per-USD**; `USD/BTC = 1e8 / price`. A Sidepit high is the

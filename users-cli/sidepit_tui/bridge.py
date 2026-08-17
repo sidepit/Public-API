@@ -28,7 +28,8 @@ import pynng
 from sidepit_trader import wallet
 from sidepit_trader._proto import pb
 from sidepit_trader.feeds import RejectionFeed
-from sidepit_trader.reqrep import RequestClient
+from sidepit_trader.reqrep import (RequestClient, project_account_requests,
+                                   project_unlock_records)
 from sidepit_trader.signer import Signer
 from sidepit_trader.submit import Submitter
 from sidepit_trader.sync import snapshot_sync
@@ -77,7 +78,9 @@ class Snap:
     positions: list = field(default_factory=list)    # dicts, gateway-shaped
     orders: list = field(default_factory=list)       # today's orders (orderfills)
     open_orders: list = field(default_factory=list)  # authoritative (snapshot sync)
-    delegates: list = field(default_factory=list)    # delegate_data
+    delegates: list = field(default_factory=list)    # settled truth (delegate_data)
+    account_requests: list = field(default_factory=list)  # receipts, keyed by oid
+    unlock_records: list = field(default_factory=list)    # unlock lifecycle rows
     # on-chain (sidepit_id address UTXOs)
     chain_confirmed: int = 0
     chain_mempool: int = 0
@@ -148,6 +151,13 @@ class Bridge(threading.Thread):
         if self._sub is None:
             self._sub = Submitter(self._identity.signer(), self.host)
         return self._sub
+
+    def _receipt_pending(self, verb: str, agent_id: str | None = None) -> bool:
+        """True while a same-verb receipt is still is_pending — resist duplicate
+        delegate/revoke/unlock submits until the terminal result lands."""
+        return any(r["is_pending"] and r["verb"] == verb
+                   and (agent_id is None or r["agent_id"] == agent_id)
+                   for r in self.snap.account_requests)
 
     def run(self) -> None:
         while not self._halt.is_set():
@@ -265,15 +275,29 @@ class Bridge(threading.Thread):
                 "ns": int(oid.rsplit(":", 1)[-1] or 0)})
         orders.sort(key=lambda o: -o["ns"])
         s.orders = orders
+        # Contract projection (no client-side state machine): receipts are
+        # history (is_pending=True = received/displayed, NOT active; terminal
+        # lands on the SAME oid — reject_code decides applied vs rejected).
+        # Settled delegate truth = accountops.delegate_data; the live routing
+        # set = accountstate.active_delegates.
+        reqs = project_account_requests(tp)
+        s.account_requests = reqs
+        s.unlock_records = project_unlock_records(tp)
+        pending_agents = {r["agent_id"] for r in reqs
+                          if r["is_pending"] and r["verb"] in
+                          ("new_delegate", "revoke_delegate")}
         delegs = []
-        has_pending_req = any(r.is_pending for r in tp.accountops.account_requests)
         for ad in tp.accountops.delegate_data:
             delegs.append({
                 "trader_id": ad.agent_id,
                 "status": pb.AccountDelegate.DelegateStatus.Name(ad.status),
                 "is_active": ad.is_active,
                 "updatetime": int(ad.updatetime),
-                "pending": not ad.is_active and has_pending_req})
+                "pending": ad.agent_id in pending_agents})
+        seen = {d["trader_id"] for d in delegs}
+        for agent in pending_agents - seen:   # receipt exists, nothing settled yet
+            delegs.append({"trader_id": agent, "status": "DELEGATE_NONE",
+                           "is_active": False, "updatetime": 0, "pending": True})
         s.delegates = delegs
 
     def _poll_open_orders(self) -> None:
@@ -371,6 +395,11 @@ class Bridge(threading.Thread):
                 self._last["account"] = 0.0
             elif verb == "unlock":
                 _, amount = parts
+                if self._receipt_pending("unlock"):
+                    self.on_event("warning",
+                                  "an unlock receipt is still pending — wait "
+                                  "for its terminal result before re-submitting")
+                    return
                 # One open unlock per account: a second request while one is
                 # RESERVED is rejected on margin and recorded as UNLOCK_REJECTED.
                 if self.snap.pending_unlock > 0:
@@ -391,6 +420,12 @@ class Bridge(threading.Thread):
                 self._last["account"] = 0.0
             elif verb == "register_delegate":
                 _, trader_id, pubkey = parts
+                if self._receipt_pending("new_delegate", trader_id) or \
+                        self._receipt_pending("revoke_delegate", trader_id):
+                    self.on_event("warning",
+                                  f"a delegate request for {trader_id[:14]}… is "
+                                  f"still pending — wait for its terminal result")
+                    return
                 self._submitter().register_delegate(trader_id, pubkey)
                 self.on_event("success",
                               f"delegate registration submitted for {trader_id} "
@@ -399,6 +434,12 @@ class Bridge(threading.Thread):
                 self._last["account"] = 0.0
             elif verb == "revoke_delegate":
                 _, trader_id = parts
+                if self._receipt_pending("new_delegate", trader_id) or \
+                        self._receipt_pending("revoke_delegate", trader_id):
+                    self.on_event("warning",
+                                  f"a delegate request for {trader_id[:14]}… is "
+                                  f"still pending — wait for its terminal result")
+                    return
                 self._submitter().revoke_delegate(trader_id)
                 self.on_event("success", f"delegate revoke submitted for {trader_id}")
                 self._last["account"] = 0.0
