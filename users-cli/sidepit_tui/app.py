@@ -2,7 +2,8 @@
 
 Implements the TUI-Design-Handoff (2026-06-10): three-panel cockpit, prompt +
 tagged-log loop as the primary surface, transparent 5-level book with depth
-shading and the 1-second auction countdown, BTC-denominated risk envelope.
+shading and the DLOB one-second deterministic-auction countdown,
+BTC-denominated risk envelope.
 Where the mockup and the real exchange disagree, the real exchange wins:
 dated inverse forwards (no perps), 1s epochs (no µs theater), and honest
 delegation status instead of fictional ML-KEM pairing.
@@ -577,9 +578,9 @@ class SidepitApp(App):
 
     @ui_update
     def _refresh_book(self) -> None:
-        """5-level transparent book + spread bar with the 1s auction countdown."""
+        """5-level transparent book + spread bar with the DLOB countdown."""
         s = self.snap
-        out = [title("book · transparent · 1s auctions")]
+        out = [title("book · transparent · DLOB 1s deterministic auctions")]
         if not s.depth_bids and not s.depth_asks:
             out.append(f"[{DIM}]no live book (exchange {s.state})[/]")
         else:

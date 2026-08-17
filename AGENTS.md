@@ -26,10 +26,10 @@ intended Sidepit account.
 ## What is Sidepit?
 
 A Bitcoin-margined **forwards** exchange (dated contracts, e.g. `USDBTCU26` —
-not perpetuals) running a deterministic limit order book. The exchange runs in
-1-second **epochs**: each epoch's transactions are batched, ordered by a
-sequencing auction, then matched by a standard CLOB at limit prices. Within an
-epoch there is no time priority — best price wins, not the fastest machine.
+not perpetuals) running DLOB: one-second deterministic auctions. In each
+one-second **epoch**, transactions are deterministically sequenced and matched
+by a standard CLOB at limit prices. Within an epoch there is no time priority —
+best price wins, not the fastest machine.
 Settlement is daily mark-to-market in satoshis; margin is shared across the
 account.
 
@@ -119,19 +119,21 @@ Do not place a customer order from a literal code sample. Use the bundled
 delegate-only gate in `skills/sidepit-trade/scripts/sidepit_agent.py`:
 
 1. `preview-order` derives the active ticker and shows exact side/exposure,
-   limit in both price conventions, projected position, margin, numeric fee,
-   and whether the order currently rests or crosses.
+   order type, limit or explicit no-price-protection warning, projected
+   position, margin, numeric fee, and expected execution behavior.
 2. The human replies `CONFIRM <preview-id>`.
 3. `send-order` revalidates the preview, writes the public handle durably, then
    signs and submits with the ACTIVE delegate file.
 
 Low-level SDK verbs remain `Submitter.new_order`, `cancel`, `cancel_replace`,
-and `market_order`. There is no native market type: `market_order` places a
-marketable limit crossed through the touch. Client builders must add the same
-preview and explicit-confirmation boundary before exposing them to users.
+and `market_order`. A native immediate-or-cancel market order is the same
+`NewOrder` with `price=0`: it fills available opposite liquidity in the next
+DLOB auction and atomically cancels every unfilled remainder. It has no price
+protection and never rests. Client builders must add the same preview and
+explicit-confirmation boundary before exposing it to users.
 
-A successful send means **queued**: the order resolves at the next 1-second
-auction. Outcomes arrive on the feeds — fills and book updates on 12124,
+A successful send means **queued**: the order resolves in the next DLOB
+one-second deterministic auction. Outcomes arrive on the feeds — fills and book updates on 12124,
 rejections on 12128. The `Submitter` keeps its push connection fresh across
 idle periods automatically; if you push raw NNG yourself, reopen an idle push
 socket before sending.

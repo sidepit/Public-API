@@ -4,8 +4,8 @@
 That separation is enforced by the protocol: the agent can trade and cancel;
 it cannot withdraw Bitcoin or authorize another agent.
 
-[Sidepit](https://sidepit.com) is a Bitcoin-margined **forwards** exchange. Its
-one-second batch auctions make speed irrelevant inside each batch: best price
+[Sidepit](https://sidepit.com) is a Bitcoin-margined **forwards** exchange. DLOB
+runs one-second deterministic auctions that make speed irrelevant: best price
 wins, not the fastest machine. Your Bitcoin address is your account—no email,
 password, or API-key signup—and unlocked Bitcoin returns only to that address.
 
@@ -16,7 +16,8 @@ The pair of public skills is the product journey:
    authorize a locally created agent key, and verify it ACTIVE.
 2. [`sidepit-trade`](skills/sidepit-trade/SKILL.md) loads only that restricted
    key, previews exposure, published margin allowance, user-verified fee, and
-   exact price, waits for confirmation, trades, reconciles, and flattens.
+   either an exact limit or native IOC market warning, waits for confirmation,
+   trades, reconciles, and flattens.
 
 Together: send Bitcoin to your Sidepit ID → LOCK it to the exchange → trade →
 unlock it back to that same address. Your agent earns its edge from its risk

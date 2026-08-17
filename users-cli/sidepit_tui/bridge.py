@@ -357,14 +357,10 @@ class Bridge(threading.Thread):
             elif verb == "market":
                 _, side, size = parts
                 s = self.snap
-                oid, px = self._submitter().market_order(
-                    side, size, s.ticker, bid=s.bid, ask=s.ask, last=s.last)
-                if oid is None:
-                    self.on_event("error", f"market: no live quote to cross (px={px})")
-                else:
-                    self.on_event("success",
-                                  f"MKT {('BUY' if side > 0 else 'SELL')} {size} → "
-                                  f"marketable limit @ {px} · clears next epoch")
+                oid = self._submitter().market_order(side, size, s.ticker)
+                self.on_event("success",
+                              f"IOC MKT {('BUY' if side > 0 else 'SELL')} {size} → "
+                              f"{oid[-18:]} · unfilled remainder cancels next DLOB auction")
                 self._last["sync"] = 0.0
             elif verb == "cancel_all":
                 n = 0
@@ -383,11 +379,8 @@ class Bridge(threading.Thread):
                     qty = p["contracts"]
                     if not qty:
                         continue
-                    oid, px = sub.market_order(-1 if qty > 0 else 1, abs(qty),
-                                               p["ticker"], bid=s.bid, ask=s.ask,
-                                               last=s.last)
-                    if oid is not None:
-                        closed += 1
+                    sub.market_order(-1 if qty > 0 else 1, abs(qty), p["ticker"])
+                    closed += 1
                 self.on_event("success",
                               f"FLATTEN_ALL submitted · {len(s.open_orders)} cancel(s), "
                               f"{closed} closing order(s) · verify next epoch")

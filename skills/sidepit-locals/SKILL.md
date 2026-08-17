@@ -78,9 +78,11 @@ Tell the human these facts before opening a wallet:
 
 1. The `initial margin` printed above is the engine minimum per contract, not a
    recommended deposit. Adverse P&L and fees also consume margin.
-2. The public API does not currently publish a trading-fee schedule or a
-   universal safety buffer. Verify current terms in the web experience or with
-   the Sidepit beta operator before locking BTC. If they are unavailable, STOP.
+2. Trading costs one kind of fee: an execution fee on fills — 125 sats per
+   contract per side, so a full open-and-close round turn costs the trader
+   250 sats (~$0.25 at $100,000/BTC). The engine does not yet deduct it; the
+   schedule is stated so the human can size deposits. There is no published
+   universal safety buffer — size conservatively.
 3. LOCK forwards the connected address's entire confirmed on-chain balance to
    Sidepit; the Bitcoin network fee comes out of that balance. Use a dedicated
    `bc1q` address holding only the amount the human intends to lock.

@@ -5,8 +5,9 @@ a typed intent it can explain, or says it didn't understand. No guessing with
 money.
 
 Real-system rules enforced here (mockup fiction loses):
-  - "market" orders are marketable LIMITS crossed through the touch
-    (Submitter.market_order) — the venue has no native market type.
+  - "market" orders are native immediate-or-cancel orders (`NewOrder.price=0`);
+    available opposite liquidity fills and every unfilled remainder cancels in
+    the same DLOB deterministic auction.
   - sizes are integer CONTRACTS on the wire; `0.25 btc` is converted via the
     live price (1 contract = $contract_size, $1 = price_sats sats).
   - prices are sats-per-USD (the native book unit).
@@ -53,8 +54,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
         return Intent("HELP", HELP)
     if t in ("go flat", "go flat and exit", "flatten", "flatten all", "exit all"):
         return Intent("FLATTEN_ALL",
-                      "parsed → FLATTEN_ALL · cancel all working orders, then cross "
-                      "every position out (marketable limits)")
+                      "parsed → FLATTEN_ALL · cancel all working orders, then send "
+                      "IOC market closes for every position")
     if t in ("cancel all", "cancel all working orders", "cancel everything"):
         return Intent("CANCEL_ALL", "parsed → CANCEL_ALL · cancel all working orders")
     if t in ("risk", "what's my risk", "whats my risk", "what's my risk in btc terms",
@@ -71,7 +72,7 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
             raise ValueError("size and price must be positive")
         return Intent("LMT",
                       f"parsed → LMT {'BUY' if side > 0 else 'SELL'} {size} @ {price} "
-                      f"sats/USD · routing to auction t+1s",
+                      f"sats/USD · routing to the next DLOB deterministic auction",
                       side=side, size=size, price=price)
     m = _MKT.match(t)
     if m:
@@ -81,8 +82,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
             raise ValueError("size must be positive")
         return Intent("MKT",
                       f"parsed → MKT {'BUY' if side > 0 else 'SELL'} {size} · "
-                      f"marketable limit crossed through the touch (no native market "
-                      f"type) · routing to auction t+1s",
+                      f"native IOC: fill available liquidity, cancel every remainder · "
+                      f"routing to the next DLOB auction",
                       side=side, size=size)
     m = _CXL.match(t)
     if m:

@@ -31,6 +31,7 @@ from sidepit_trader import (  # noqa: E402
     Submitter,
     pb,
 )
+from sidepit_trader.config import EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE  # noqa: E402
 from sidepit_trader.signer import wif_to_priv_hex  # noqa: E402
 from sidepit_trader.submit import next_ns  # noqa: E402
 from sidepit_trader.sync import snapshot_sync  # noqa: E402
@@ -262,11 +263,16 @@ def _preview_id(payload: dict) -> str:
     return hashlib.sha256(body).hexdigest()[:16]
 
 
-def _expectation(side: int, limit_price: int, bid: int, ask: int) -> str:
+def _expectation(side: int, limit_price: int | None, bid: int, ask: int,
+                 *, is_market: bool = False) -> str:
+    if is_market:
+        return ("IOC MARKET — takes available opposite liquidity in the next DLOB "
+                "auction and cancels every unfilled remainder; no price protection")
+    assert limit_price is not None
     if side > 0 and ask and limit_price >= ask:
-        return "MARKETABLE — can fill in the next auction, not guaranteed"
+        return "MARKETABLE LIMIT — can fill in the next DLOB auction, not guaranteed"
     if side < 0 and bid and limit_price <= bid:
-        return "MARKETABLE — can fill in the next auction, not guaranteed"
+        return "MARKETABLE LIMIT — can fill in the next DLOB auction, not guaranteed"
     return "RESTING — waits unless the market reaches the limit"
 
 
@@ -285,8 +291,10 @@ def cmd_market(_args) -> int:
         _print_market(market_snapshot(req))
     finally:
         req.close()
-    print("trading fees     not published by the current public API; verify current terms "
-          "before a live order")
+    print(f"execution fee    {EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE} sats per "
+          "contract per side (open + close = "
+          f"{2 * EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE} sats round turn per "
+          "trader); schedule only — the engine does not yet deduct it")
     return 0
 
 
@@ -393,6 +401,13 @@ def cmd_status(args) -> int:
 
 def _order_payload(args, delegate: Delegate, market: dict, tp) -> dict:
     side = 1 if args.side == "buy" else -1
+    is_market = bool(getattr(args, "market", False))
+    limit_price = None if is_market else args.limit_price
+    reference_price = (limit_price if not is_market else
+                       ((market["ask"] if side > 0 else market["bid"])
+                        or market["last"] or market["bid"] or market["ask"]))
+    if reference_price <= 0:
+        raise Stop("no live price is available for an honest exposure estimate")
     current = _position(tp, market["ticker"])
     projected = current + side * args.contracts
     initial = int(market["initial_margin_sats"])
@@ -417,14 +432,16 @@ def _order_payload(args, delegate: Delegate, market: dict, tp) -> dict:
         "side": side,
         "side_name": args.side.upper(),
         "contracts": args.contracts,
-        "limit_price": args.limit_price,
+        "order_type": "market" if is_market else "limit",
+        "limit_price": limit_price,
+        "reference_price": reference_price,
         "quote": {"bid": market["bid"], "ask": market["ask"], "last": market["last"]},
-        "expectation": _expectation(side, args.limit_price,
-                                     market["bid"], market["ask"]),
+        "expectation": _expectation(side, limit_price, market["bid"], market["ask"],
+                                     is_market=is_market),
         "unit_usd": market["unit_usd"],
         "usd_notional": market["unit_usd"] * args.contracts,
-        "btc_equivalent_sats_at_limit": (
-            market["unit_usd"] * args.contracts * args.limit_price
+        "btc_equivalent_sats_at_reference": (
+            market["unit_usd"] * args.contracts * reference_price
         ),
         "current_position": current,
         "projected_position": projected,
@@ -441,29 +458,58 @@ def _order_payload(args, delegate: Delegate, market: dict, tp) -> dict:
 
 
 def _print_order_preview(p: dict) -> None:
-    usd_btc = 1e8 / p["limit_price"]
+    reference_usd_btc = 1e8 / p["reference_price"]
     print("ORDER PREVIEW — NOTHING SENT")
     print(f"preview id       {p['preview_id']}")
     print(f"account          {p['account']}")
     print(f"active forward   {p['ticker']}")
-    print(f"order            {p['side_name']} {p['contracts']} contract(s) @ "
-          f"{p['limit_price']} sats per USD (${usd_btc:,.2f}/BTC)")
-    print(f"exposure         ${p['usd_notional']:,}; "
-          f"{p['btc_equivalent_sats_at_limit']:,} sats BTC-equivalent at the limit")
+    if p["order_type"] == "market":
+        print(f"order            IOC MARKET {p['side_name']} {p['contracts']} contract(s) · "
+              "no limit price (wire price 0)")
+        print(f"reference        {p['reference_price']} sats per USD "
+              f"(${reference_usd_btc:,.2f}/BTC); actual fills can differ")
+    else:
+        print(f"order            LIMIT {p['side_name']} {p['contracts']} contract(s) @ "
+              f"{p['limit_price']} sats per USD (${reference_usd_btc:,.2f}/BTC)")
+    exposure_label = "exposure max" if p["order_type"] == "market" else "exposure"
+    print(f"{exposure_label:<17}${p['usd_notional']:,}; approximately "
+          f"{p['btc_equivalent_sats_at_reference']:,} sats BTC-equivalent at the "
+          f"{p['reference_price']} reference")
     print(f"meaning          {p['direction']}")
-    print(f"position         {p['current_position']:+d} -> {p['projected_position']:+d}")
+    position_label = "position max" if p["order_type"] == "market" else "position"
+    print(f"{position_label:<17}{p['current_position']:+d} -> "
+          f"{p['projected_position']:+d}" +
+          (" if fully filled" if p["order_type"] == "market" else ""))
     print(f"execution        {p['expectation']}")
     print(f"margin           {p['additional_margin_allowance_sats']:,} sats additional "
           f"allowance; {p['available_margin_sats']:,} sats available")
-    print(f"fee              {p['fee_sats']:,} sats ({p['fee_source']}; public API "
-          "does not publish a fee schedule)")
-    print("auction          queued for a one-second batch; sending is not a fill")
+    fee_usd = p["fee_sats"] / p["reference_price"] if p["reference_price"] else 0
+    print(f"fee              {p['fee_sats']:,} sats (~${fee_usd:,.2f} at reference) — "
+          f"{p['fee_source']}; schedule only, not yet deducted by the engine")
+    print("auction          queued for the next DLOB one-second deterministic auction; "
+          "sending is not a fill")
     print(f"confirm exactly  CONFIRM {p['preview_id']}")
 
 
+def _fee_defaults(args, contracts: int) -> None:
+    """Fill fee fields from the published execution-fee schedule when the
+    human did not override: 125 sats per contract per side."""
+    if args.fee_sats is None:
+        args.fee_sats = EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE * contracts
+        args.fee_source = ("published execution-fee schedule: "
+                           f"{EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE} sats/"
+                           "contract/side (2026-08-17)")
+    elif not args.fee_source:
+        raise Stop("an overridden --fee-sats requires --fee-source")
+
+
 def cmd_preview_order(args) -> int:
-    if args.contracts <= 0 or args.limit_price <= 0 or args.fee_sats < 0:
-        raise Stop("contracts and limit-price must be positive; fee-sats cannot be negative")
+    is_market = bool(getattr(args, "market", False))
+    if args.contracts <= 0 or (args.fee_sats is not None and args.fee_sats < 0):
+        raise Stop("contracts must be positive; fee-sats cannot be negative")
+    _fee_defaults(args, args.contracts)
+    if not is_market and (args.limit_price is None or args.limit_price <= 0):
+        raise Stop("a limit order requires a positive limit-price")
     delegate = load_delegate(args.key_file)
     req = _new_req()
     try:
@@ -490,13 +536,31 @@ def _result_for_order(tp, orderid: str) -> str:
     if orderid not in tp.orderfills:
         return "UNKNOWN — not in point-in-time order history; do not retry"
     order = tp.orderfills[orderid].order
-    if int(order.remaining_qty) > 0:
-        return f"RESTING — {int(order.remaining_qty)} remaining"
-    if int(order.filled_qty) > 0:
-        return f"FILLED — {int(order.filled_qty)} filled @ {float(order.avg_price):.2f}"
-    if int(order.canceled_qty) > 0:
-        return f"CANCELED — {int(order.canceled_qty)} canceled"
+    remaining = int(order.remaining_qty)
+    filled = int(order.filled_qty)
+    canceled = int(order.canceled_qty)
+    if remaining > 0:
+        return f"RESTING LIMIT — {remaining} remaining"
+    if filled > 0 and canceled > 0:
+        return (f"PARTIAL FILL — {filled} filled @ {float(order.avg_price):.2f}; "
+                f"{canceled} remainder canceled")
+    if filled > 0:
+        return f"FILLED — {filled} filled @ {float(order.avg_price):.2f}"
+    if canceled > 0:
+        return f"CANCELED — {canceled} unfilled contract(s) canceled"
     return "SEEN — terminal quantities not yet published"
+
+
+def _submit_preview(submitter: Submitter, p: dict, timestamp_ns: int) -> str:
+    if p["order_type"] == "market":
+        return submitter.market_order(
+            int(p["side"]), int(p["contracts"]), p["ticker"],
+            timestamp_ns=timestamp_ns,
+        )
+    return submitter.new_order(
+        int(p["side"]), int(p["contracts"]), int(p["limit_price"]),
+        p["ticker"], timestamp_ns=timestamp_ns,
+    )
 
 
 def cmd_send_order(args) -> int:
@@ -518,10 +582,14 @@ def cmd_send_order(args) -> int:
         tp = require_active(req, delegate)
         if _position(tp, p["ticker"]) != int(p["current_position"]):
             raise Stop("position changed after preview; create a fresh preview")
-        now_expectation = _expectation(int(p["side"]), int(p["limit_price"]),
-                                       market["bid"], market["ask"])
+        is_market = p["order_type"] == "market"
+        now_expectation = _expectation(
+            int(p["side"]),
+            None if is_market else int(p["limit_price"]),
+            market["bid"], market["ask"], is_market=is_market,
+        )
         if now_expectation != p["expectation"]:
-            raise Stop("the order's rest-or-cross expectation changed; create a fresh preview")
+            raise Stop("the order's execution expectation changed; create a fresh preview")
         if int(tp.accountstate.available_margin) < int(p["additional_margin_allowance_sats"]):
             raise Stop("available margin fell below the preview allowance; create a fresh preview")
 
@@ -543,10 +611,7 @@ def cmd_send_order(args) -> int:
         rejects = RejectionFeed(HOST, delegate.account)
         time.sleep(0.10)
         submitter = Submitter(delegate.signer, HOST)
-        sent_id = submitter.new_order(
-            int(p["side"]), int(p["contracts"]), int(p["limit_price"]),
-            p["ticker"], timestamp_ns=timestamp_ns,
-        )
+        sent_id = _submit_preview(submitter, p, timestamp_ns)
         if sent_id != orderid:
             raise Stop(f"order handle self-check failed; inspect {attempt_path}")
         print(f"QUEUED           {orderid}")
@@ -561,13 +626,16 @@ def cmd_send_order(args) -> int:
         outcome = "REJECTED — " + ", ".join(RejectionFeed.code_name(r) for r in rejected)
     else:
         outcome = _result_for_order(tp_after, orderid)
+    if p["order_type"] == "market" and outcome.startswith("RESTING"):
+        outcome = ("CONTRACT ERROR — IOC market order is resting; preserve records, "
+                   "stop trading, and report the public order ID")
     result = {"schema": 1, "action": "order-result", "preview_id": p["preview_id"],
               "orderid": orderid, "outcome": outcome, "checked_ns": time.time_ns()}
     result_path = _ensure_state_dir() / f"order-result-{p['preview_id']}.json"
     _write_once(result_path, result)
     print(f"outcome          {outcome}")
     print(f"result record    {result_path}")
-    return 0 if not outcome.startswith(("REJECTED", "UNKNOWN")) else 4
+    return 0 if not outcome.startswith(("REJECTED", "UNKNOWN", "CONTRACT ERROR")) else 4
 
 
 def cmd_cancel(args) -> int:
@@ -618,20 +686,10 @@ def _flatten_payload(args, delegate: Delegate, market: dict, tp, orders: dict) -
             if not qty:
                 continue
             positions[ticker] = qty
-            q = _new_req()
-            try:
-                quote = q.quote(ticker).quote
-            finally:
-                q.close()
             side = -1 if qty > 0 else 1
-            ref = int(quote.bid) if side < 0 else int(quote.ask)
-            if not ref:
-                ref = int(quote.last) or (int(quote.ask) if side < 0 else int(quote.bid))
-            price = ref - 2 if side < 0 else ref + 2
-            if price <= 0:
-                raise Stop(f"no usable quote for {ticker}; cannot preview flatten")
             closes.append({"ticker": ticker, "position": qty, "side": side,
-                           "contracts": abs(qty), "limit_price": price})
+                           "contracts": abs(qty), "order_type": "market"})
+    _fee_defaults(args, sum(c["contracts"] for c in closes))
     now = time.time_ns()
     payload = {
         "schema": 1, "action": "flatten", "created_ns": now,
@@ -639,14 +697,14 @@ def _flatten_payload(args, delegate: Delegate, market: dict, tp, orders: dict) -
         "host": HOST, "account": delegate.account, "agent_id": delegate.agent_id,
         "open_order_ids": sorted(orders), "positions": positions, "closes": closes,
         "fee_sats": args.fee_sats, "fee_source": args.fee_source,
-        "warning": "cancels land first; if position or crossing changes, close orders stop",
+        "warning": "cancels land first; if the position changes, close orders stop",
     }
     payload["preview_id"] = _preview_id(payload)
     return payload
 
 
 def cmd_preview_flatten(args) -> int:
-    if args.fee_sats < 0:
+    if args.fee_sats is not None and args.fee_sats < 0:
         raise Stop("fee-sats cannot be negative")
     delegate = load_delegate(args.key_file)
     req = _new_req()
@@ -666,11 +724,12 @@ def cmd_preview_flatten(args) -> int:
     print(f"cancel first     {len(p['open_order_ids'])} open order(s), snapshot epoch {epoch}")
     for item in p["closes"]:
         side = "BUY" if item["side"] > 0 else "SELL"
-        print(f"close            {item['ticker']} {side} {item['contracts']} @ "
-              f"{item['limit_price']} (marketable limit)")
+        print(f"close            {item['ticker']} IOC MARKET {side} "
+              f"{item['contracts']} (unfilled remainder cancels)")
     if not p["open_order_ids"] and not p["closes"]:
         print("result           already flat")
-    print(f"fee              {p['fee_sats']:,} sats ({p['fee_source']})")
+    print(f"fee              {p['fee_sats']:,} sats ({p['fee_source']}; "
+          "schedule only, not yet deducted by the engine)")
     print(f"confirm exactly  CONFIRM {p['preview_id']}")
     print(f"preview file     {path}")
     return 0
@@ -721,17 +780,8 @@ def cmd_send_flatten(args) -> int:
 
         close_ids = []
         for item in p["closes"]:
-            quote = req.quote(item["ticker"]).quote
-            still_crosses = (item["side"] > 0 and int(quote.ask)
-                             and item["limit_price"] >= int(quote.ask)) or (
-                                 item["side"] < 0 and int(quote.bid)
-                                 and item["limit_price"] <= int(quote.bid))
-            if not still_crosses:
-                raise Stop("orders were canceled, but a close limit no longer crosses; "
-                           "create a fresh flatten preview")
-        for item in p["closes"]:
-            close_ids.append(sub.new_order(item["side"], item["contracts"],
-                                           item["limit_price"], item["ticker"]))
+            close_ids.append(sub.market_order(item["side"], item["contracts"],
+                                              item["ticker"]))
         if close_ids:
             print("CLOSES QUEUED    " + ", ".join(close_ids))
             time.sleep(args.wait_seconds)
@@ -787,9 +837,14 @@ def parser() -> argparse.ArgumentParser:
     q.add_argument("--key-file", required=True)
     q.add_argument("--side", required=True, choices=("buy", "sell"))
     q.add_argument("--contracts", required=True, type=int)
-    q.add_argument("--limit-price", required=True, type=int)
-    q.add_argument("--fee-sats", required=True, type=int)
-    q.add_argument("--fee-source", required=True)
+    order_kind = q.add_mutually_exclusive_group(required=True)
+    order_kind.add_argument("--limit-price", type=int)
+    order_kind.add_argument("--market", action="store_true",
+                            help="native IOC market order; omit limit price")
+    q.add_argument("--fee-sats", type=int, default=None,
+                   help="override the published execution-fee schedule "
+                        "(default: 125 sats/contract/side); requires --fee-source")
+    q.add_argument("--fee-source", default="")
     q.add_argument("--expires-seconds", type=int, default=300)
     q.set_defaults(func=cmd_preview_order)
 
@@ -809,8 +864,11 @@ def parser() -> argparse.ArgumentParser:
 
     q = sub.add_parser("preview-flatten", help="preview cancel-all plus position closes")
     q.add_argument("--key-file", required=True)
-    q.add_argument("--fee-sats", required=True, type=int)
-    q.add_argument("--fee-source", required=True)
+    q.add_argument("--fee-sats", type=int, default=None,
+                   help="override the published execution-fee schedule "
+                        "(default: 125 sats/contract/side on the closes); "
+                        "requires --fee-source")
+    q.add_argument("--fee-source", default="")
     q.add_argument("--expires-seconds", type=int, default=300)
     q.set_defaults(func=cmd_preview_flatten)
 

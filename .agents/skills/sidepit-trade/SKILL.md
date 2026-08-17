@@ -1,6 +1,6 @@
 ---
 name: sidepit-trade
-description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate — read the live dated forward, preview exposure and published margin allowance, require explicit confirmation, place or cancel, reconcile, resume, and flatten. Use after sidepit-locals onboarding."
+description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate — read the live dated forward, preview limit or native IOC market exposure and published margin allowance, require explicit confirmation, place or cancel, reconcile, resume, and flatten. Use after sidepit-locals onboarding."
 ---
 
 # sidepit-trade (discovery stub)

@@ -19,7 +19,8 @@ Do not use internal instructions, fund BTC, authorize, sign, or submit.
    new 0600 write-once file, public output only, and no existing key changed.
 6. Use fixtures/mocks for preview and send gates. Confirm an inactive delegate,
    wrong file mode, expired preview, changed position, changed exposure, wrong
-   confirmation, or repeated attempt sends zero transactions.
+   confirmation, or repeated attempt sends zero transactions. Confirm native
+   market serialization uses `price=0` and never supplies a limit.
 
 ## Three customer passes
 
@@ -36,28 +37,31 @@ command and every command works from a fresh shell.
 ### P2 — human deciding whether to trust it
 
 Within 30 seconds, the human must know what they will accomplish, required
-tools/time, real-BTC risk, whole-balance LOCK behavior, the missing public fee
-schedule, and the key boundary. They must understand this sentence after one
+tools/time, real-BTC risk, whole-balance LOCK behavior, the execution fee
+(125 sats per contract per side), and the key boundary. They must understand this sentence after one
 read: “I keep the money key; my agent gets a revocable trading key that cannot
 withdraw.” No term needed for the next action may require outside research.
 
 ### P3 — literal small model
 
 Execute only literal instructions and expected branches. Confirm it never asks
-for a WIF or seed words, never chooses side/size/price/fee, never treats pending
-as ACTIVE, never treats queued as filled, never retries UNKNOWN, and cannot
-reach a live send without `CONFIRM <matching-preview-id>`.
+for a WIF or seed words, never chooses order type/side/size/price/fee, never
+treats pending as ACTIVE, never treats queued as filled, never retries UNKNOWN,
+and cannot reach a live send without `CONFIRM <matching-preview-id>`.
 
-## R1–R12 release checklist
+## R1–R13 release checklist
 
 - **R1:** Delegate-only agent path; an account key is refused.
 - **R2:** Every live order shows direction, contracts, USD and BTC-equivalent
-  exposure, inverse price plus USD/BTC, projected position, margin used/needed/
-  available, numeric fee/source, rest-or-cross expectation, and exact confirm.
+  exposure, projected position, margin used/needed/available, numeric fee/source,
+  execution expectation, and exact confirm. LIMIT shows its exact inverse price
+  plus USD/BTC. MARKET shows no limit, no price protection, the current reference
+  quote, native IOC semantics, and the maximum position if fully filled.
 - **R3:** Funding decision comes before the wallet address; whole-balance LOCK,
   network fee, dynamic margin, fee gap, and start-small warning are explicit.
 - **R4:** Closed, pending deposit, pending/rejected authorization, queued,
-  resting, filled, rejected, and unknown each state what happened and what next.
+  resting limit, filled, partial IOC fill, unfilled IOC cancel, rejected, and
+  unknown each state what happened and what next. A market order never rests.
 - **R5:** No pinned test count.
 - **R6:** Public handles persist; status, cancel, and flatten work from a fresh
   shell without a secret on argv.
@@ -77,6 +81,8 @@ reach a live send without `CONFIRM <matching-preview-id>`.
 - **R12:** A newcomer can complete the primary web/UniSat lane without knowing
   terminal-app acronyms, secp256k1, bech32, protobuf, nonce, or request/reply
   vocabulary.
+- **R13:** Customer copy uses the exact product term “DLOB — one-second
+  deterministic auctions.”
 
 ## Finish line
 
@@ -84,4 +90,5 @@ PASS only when all three personas answer yes to:
 
 > Your account key never enters the agent or its transcript, and no live order
 > is sent until a verified trading-only delegate presents the exact exposure,
-> margin, fees, and price for your explicit confirmation.
+> margin, fees, and either the exact limit price or explicit IOC market risk for
+> your confirmation.

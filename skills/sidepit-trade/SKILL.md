@@ -1,6 +1,6 @@
 ---
 name: sidepit-trade
-description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate: read the live dated forward, preview exposure and published margin allowance, require explicit confirmation, place or cancel an order, reconcile the outcome, resume later, and flatten safely. Use after sidepit-locals has completed onboarding."
+description: "Trade a funded Sidepit account through an ACTIVE, trading-only delegate: read the live dated forward, preview limit or native IOC market exposure and published margin allowance, require explicit confirmation, place or cancel, reconcile, resume, and flatten safely. Use after sidepit-locals onboarding."
 ---
 
 # Sidepit Trade — the agent enters the pit
@@ -16,8 +16,8 @@ Order, preview, attempt, and result records survive a fresh shell.
 In the first 30 seconds, know the product:
 
 - Sidepit trades dated Bitcoin-margined **forwards**, not perpetuals.
-- One-second batch auctions remove speed priority inside the batch: best price
-  wins, not the fastest machine.
+- DLOB runs one-second deterministic auctions: best price wins, not the fastest
+  machine.
 - Prices are inverse, in satoshis per USD: `USD/BTC = 100,000,000 / price`.
   A satoshi, or sat, is one hundred-millionth of a Bitcoin.
 - BUY adds a synthetic USD hedge and reduces BTC-price exposure. SELL removes
@@ -54,10 +54,12 @@ printed next-open time. If connection fails, the command identifies permission,
 DNS, refusal, or timeout. An agent sandbox may need permission for
 `api.sidepit.com:12125`.
 
-The command also states a current public-product limitation: the API does not
-publish a pre-trade fee schedule. Before any live preview, the human must obtain
-the exact expected fee from current Sidepit terms or the beta operator. Do not
-guess it and do not turn a past fee into a current claim.
+The command also states the execution-fee schedule. There is one kind of fee:
+an execution fee on fills — `execution_fee_sats_per_contract_per_side = 125`.
+Open 1 contract: 125 sats; close it: another 125; round turn per trader:
+250 sats (about $0.25 at $100,000/BTC — the exchange collects 250 per matched
+contract because both counterparties pay 125). The engine does not yet deduct
+it, so previews state it as the schedule, not a line item already taken.
 
 ## 3. Prove the saved key is an ACTIVE delegate
 
@@ -99,22 +101,30 @@ unexplained, or the delegate is not ACTIVE.
 
 ## 5. Ask for the order—never choose it silently
 
-Before constructing a preview, get four choices from the human:
+Before constructing a preview, get these choices from the human:
 
 1. BUY or SELL, using the exposure meanings at the top of this skill.
 2. Positive integer contract count. The live market command states the USD
    amount per contract.
-3. Positive integer limit price in sats per USD. A buy at or above the ask, or
-   sell at or below the bid, is marketable but still waits for the next auction.
-4. Exact expected trading fee in sats and its current source. If unavailable,
-   STOP; the public API cannot supply it yet.
+3. LIMIT or MARKET:
+   - LIMIT requires a positive integer price in sats per USD. It never executes
+     worse than that price and may rest.
+   - MARKET has no price and no price protection. It is native IOC: in the next
+     DLOB deterministic auction it fills available opposite liquidity and
+     cancels every unfilled remainder. It never rests.
+4. For LIMIT only, the exact limit price.
+5. Nothing for the fee — the preview fills it from the published schedule
+   (125 sats per contract per side) automatically. Only pass `--fee-sats` plus
+   `--fee-source` if the human explicitly supplies a different, sourced figure.
 
-Do not hardcode a side, size, price, ticker, or fee. Do not interpret “do
-something” as permission to choose financial exposure.
+Do not hardcode an order type, side, size, price, or ticker. Do not
+interpret “do something” as permission to choose financial exposure. The
+execution fee is the one value the schedule supplies for you.
 
 ## 6. Write the exact preview—nothing is sent
 
-Replace every placeholder with the human's choices and the protected file path:
+For a limit order, replace every placeholder with the human's choices and the
+protected file path:
 
 ```sh
 python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
@@ -122,9 +132,18 @@ python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
   --key-file /absolute/path/to/agent.env \
   --side HUMAN_CHOICE_LOWERCASE \
   --contracts INTEGER \
-  --limit-price SATS_PER_USD \
-  --fee-sats INTEGER \
-  --fee-source "CURRENT_SOURCE_AND_DATE"
+  --limit-price SATS_PER_USD
+```
+
+For a native IOC market order, use `--market` and omit `--limit-price`:
+
+```sh
+python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
+  preview-order \
+  --key-file /absolute/path/to/agent.env \
+  --side HUMAN_CHOICE_LOWERCASE \
+  --contracts INTEGER \
+  --market
 ```
 
 `HUMAN_CHOICE_LOWERCASE` must be exactly `buy` or `sell`; it is never chosen by
@@ -132,17 +151,23 @@ the agent. All other capitalized words are placeholders, not literal values.
 
 The preview contains:
 
-- active dated forward and exact limit in sats per USD plus USD/BTC;
-- contract count, USD notional, and BTC-equivalent notional at the limit;
+- active dated forward and either the exact limit plus USD/BTC or an explicit
+  `IOC MARKET — no limit price` warning with the current reference quote;
+- contract count, USD notional, and BTC-equivalent notional at the limit or
+  clearly labeled current reference price;
 - plain-language BUY/SELL exposure and projected position;
+- for MARKET, projected position is the maximum if the IOC fills completely;
 - current margin used, additional initial-margin allowance, and available margin;
-- numeric fee with its human-supplied current source;
-- RESTING or MARKETABLE expectation and the one-second auction caveat;
+- the execution fee in sats with its USD equivalent at the reference price —
+  filled from the published schedule (125 sats per contract per side) unless
+  the human supplied a sourced override;
+- RESTING/MARKETABLE LIMIT or IOC MARKET expectation and the DLOB auction caveat;
 - a public preview file and unique preview ID.
 
 Return the entire preview to the human. Wait. Only the exact reply
 `CONFIRM <preview-id>` authorizes that preview. “Yes,” an old confirmation, or a
-changed side/size/price/fee does not. To change anything, create a new preview.
+changed order type/side/size/price/fee does not. To change anything, create a
+new preview.
 
 ## 7. Send only the confirmed preview
 
@@ -157,16 +182,19 @@ python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
 ```
 
 The command rechecks ACTIVE state, market open, active forward, position,
-available margin, preview expiry, and rest-or-cross expectation. It writes the
-public order handle to an attempt record **before** the network send, subscribes
-to rejections before sending, then reports one of:
+available margin, preview expiry, order type, and execution expectation. It
+writes the public order handle to an attempt record **before** the network send,
+subscribes to rejections before sending, then reports one of:
 
-- `RESTING` — visible with remaining quantity;
+- `RESTING LIMIT` — visible with remaining quantity;
 - `FILLED` — filled quantity and average price;
+- `PARTIAL FILL` — market quantity filled and IOC remainder canceled;
+- `CANCELED` — an IOC market order found no available opposite liquidity;
 - `REJECTED — RC_NAME` — use the recovery map below;
 - `UNKNOWN` — do not retry; run status using the persisted order handle.
 
-`QUEUED` means the bytes were sent to the one-second auction. It is not a fill.
+`QUEUED` means the bytes were sent to the next DLOB deterministic auction. It
+is not a fill.
 
 ## 8. Cancel from a fresh shell
 
@@ -188,14 +216,13 @@ replacement order.
 ## 9. Preview and flatten all exposure
 
 Flatten cancels every resting order first, then closes remaining positions with
-marketable limits. Obtain the exact expected total trading fee, then preview:
+native IOC market orders. The preview computes the execution fee from the
+published schedule (125 sats per contract per side on the closes):
 
 ```sh
 python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
   preview-flatten \
-  --key-file /absolute/path/to/agent.env \
-  --fee-sats INTEGER \
-  --fee-source "CURRENT_SOURCE_AND_DATE"
+  --key-file /absolute/path/to/agent.env
 ```
 
 Show the complete cancel/close preview and wait for `CONFIRM <preview-id>`.
@@ -209,9 +236,10 @@ python-client/.venv/bin/python skills/sidepit-trade/scripts/sidepit_agent.py \
   --confirm "CONFIRM PREVIEW_ID"
 ```
 
-If orders, positions, or crossing conditions changed, it stops rather than
-improvising. Cancels may already be queued; run status and make a fresh preview.
-`INCOMPLETE` also means run status and preview the residual—never blindly retry.
+If orders or positions changed, it stops rather than improvising. Cancels may
+already be queued; run status and make a fresh preview. `INCOMPLETE` means an IOC
+close could not fill the whole position: run status and preview the residual—
+never blindly retry.
 
 ## Recovery map
 
@@ -231,9 +259,16 @@ improvising. Cancels may already be queued; run status and make a fresh preview.
 
 ## Operating reference
 
-- **Fees:** realized fees are published after trading, but the current public
-  API has no pre-trade schedule. The preview requires a numeric fee and current
-  human-verified source. This is a product gap, not permission to estimate.
+- **Fees:** one kind only — an execution fee on fills.
+  `execution_fee_sats_per_contract_per_side = 125`. Per trader: open 1
+  contract = 125 sats, close = 125 sats, round turn = 250 sats (~$0.25 at
+  $100,000/BTC). The exchange collects 250 sats per matched contract because
+  both counterparties pay 125. Previews fill this automatically. The engine
+  does not yet deduct it — the schedule is the fee, not a line item you will
+  see subtracted today.
+- **Market orders:** native IOC orders carry wire `price=0`. They have no price
+  protection, fill available opposite liquidity in one DLOB auction, and cancel
+  every unfilled remainder atomically. They never rest.
 - **Margin:** the active contract publishes initial and maintenance margin per
   contract. The server publishes current used/available margin and is the final
   order check. Restricted accounts reduce risk only. Open P&L and margin move
@@ -265,5 +300,7 @@ improvising. Cancels may already be queued; run status and make a fresh preview.
 - Drain order data through `more_in_epoch == 0` before acting on the book.
 - Request/reply is point-in-time; feeds are continuous. Reconnect and snapshot
   before trusting remembered open orders.
+- DLOB means one-second deterministic auctions; use that exact term in customer
+  copy.
 - A Sidepit price high is a familiar USD/BTC low because the quote is inverse.
 - Keep one writer per account and never reuse a timestamp nonce.
