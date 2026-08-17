@@ -461,7 +461,19 @@ def _selftest():
 
 if __name__ == "__main__":
     import sys
+    _USAGE = ("usage: python -m sidepit_trader.wallet [new [name]]\n"
+              "  new [name]   mint a fresh identity (prints the WIF ONCE; "
+              "optionally saves as active identity 'name')\n"
+              "  (no args)    run the crypto self-test suite\n"
+              "For a DELEGATE key bound to an account, use "
+              "`python -m sidepit_trader.agent_key new --account bc1q...`")
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help", "help"):
+        print(_USAGE)
+        sys.exit(0)
     if len(sys.argv) > 1 and sys.argv[1] == "new":
         _cmd_new(sys.argv[2] if len(sys.argv) > 2 else None)
         sys.exit(0)
+    if len(sys.argv) > 1:      # unknown verb: error out, don't silently self-test
+        print(_USAGE, file=sys.stderr)
+        sys.exit(2)
     sys.exit(0 if _selftest() else 1)

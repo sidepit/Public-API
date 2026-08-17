@@ -24,7 +24,7 @@ Verify the toolchain — this needs no network beyond pip:
 python-client/.venv/bin/python -m pytest python-client/tests -q
 ```
 
-Expected output ends with: `20 passed` (warnings are fine).
+Expected output ends with: `27 passed` (warnings are fine).
 **STOP if any test fails** — report the failure; do not trade.
 
 ## 2. Read the market (no keys)
@@ -49,6 +49,10 @@ bar O1556 H1556 L1556 C1556 v0
   orders wait for the open (schedule via `RequestClient.schedules()`).
   **STOP here if the task needs a fill now.**
 - If the script cannot connect at all, report it and STOP.
+- This skill assumes a RUNNING venue (default `api.sidepit.com`;
+  `SIDEPIT_HOST` points elsewhere). It never bootstraps or configures an
+  exchange — if your environment requires a local venue, the venue operator
+  provides it ready-to-join.
 
 ## 3. Credentials (env)
 
@@ -77,10 +81,30 @@ No account yet? Mint one and show the user its address to fund:
 cd python-client && .venv/bin/python -m sidepit_trader.wallet new
 ```
 
-It prints the new address (`sidepit_id`) and the WIF **once**. The user
-deposits BTC to that address (their own address — never from keys they don't
-control), then forwards it to the exchange (the `users-cli/` TUI's LOCK
-button does this in one tap). Trading works once the deposit is credited.
+It prints the new address (`sidepit_id`) and the WIF **once**. Funding rule:
+BTC must **reach this user-controlled address first**, then gets forwarded to
+the exchange (the `users-cli/` TUI's LOCK button does this in one tap). Where
+the BTC originally comes from doesn't matter — a withdrawal from a custodial
+exchange is fine; what matters is that it lands on the user's own address
+before LOCK. Trading works once the deposit is credited.
+
+### Mint a delegate key (for agents)
+
+On an **explicit user request**, an agent may create ONE new delegate key
+bound to the user's account. It must not inspect or modify existing keys.
+One command does the whole contract (secure randomness, unique 0600 file,
+never overwrites, never prints the secret):
+
+```sh
+cd python-client && .venv/bin/python -m sidepit_trader.agent_key new --account bc1q<the-user's-account>
+```
+
+Expected output: `pubkey`, `trader_id`, `account`, and the saved file path —
+and **nothing secret**. Reply to the user with only the 66-char compressed
+pubkey (starts `02`/`03`). The ACCOUNT owner then registers that pubkey (TUI
+delegates tab, or `Submitter.register_delegate`); once ACTIVE, trade with
+`SIDEPIT_WIF` sourced from the saved file and `SIDEPIT_ID=<the account>`.
+The delegate can trade only — it can never withdraw, appoint, or revoke.
 
 ## 4. Place an order
 
