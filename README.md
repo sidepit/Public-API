@@ -63,9 +63,8 @@ agent's protected 0600 file without sourcing it or displaying the secret.
 Every live order gets a durable public preview and matching confirmation;
 attempt and result records make reconnects and ambiguous sends recoverable.
 
-The current public API publishes contract margin and realized fees but not a
-pre-trade fee schedule. The skills surface that gap and stop before a live
-order until the human supplies current fee terms. They never guess with money.
+Execution fees are 125 sats per contract per side of each fill. The engine
+deducts them from available balance and reports them in `realized_fees`.
 
 ## Repo map
 

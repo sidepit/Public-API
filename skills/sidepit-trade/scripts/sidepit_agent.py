@@ -294,7 +294,7 @@ def cmd_market(_args) -> int:
     print(f"execution fee    {EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE} sats per "
           "contract per side (open + close = "
           f"{2 * EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE} sats round turn per "
-          "trader); schedule only — the engine does not yet deduct it")
+          "trader); the engine deducts it at each fill")
     return 0
 
 
@@ -485,7 +485,7 @@ def _print_order_preview(p: dict) -> None:
           f"allowance; {p['available_margin_sats']:,} sats available")
     fee_usd = p["fee_sats"] / p["reference_price"] if p["reference_price"] else 0
     print(f"fee              {p['fee_sats']:,} sats (~${fee_usd:,.2f} at reference) — "
-          f"{p['fee_source']}; schedule only, not yet deducted by the engine")
+          f"{p['fee_source']}; deducted by the engine at each fill")
     print("auction          queued for the next DLOB one-second deterministic auction; "
           "sending is not a fill")
     print(f"confirm exactly  CONFIRM {p['preview_id']}")
@@ -729,7 +729,7 @@ def cmd_preview_flatten(args) -> int:
     if not p["open_order_ids"] and not p["closes"]:
         print("result           already flat")
     print(f"fee              {p['fee_sats']:,} sats ({p['fee_source']}; "
-          "schedule only, not yet deducted by the engine)")
+          "deducted by the engine at each fill)")
     print(f"confirm exactly  CONFIRM {p['preview_id']}")
     print(f"preview file     {path}")
     return 0

@@ -161,6 +161,32 @@ Balances: `available_balance` is yesterday's settled figure (static intraday);
 client-side from positions + `avg_price` + the current mark; at daily
 settlement it folds into the balance and `avg_price` resets.
 
+For a customer's current view, read `ACTIVE_PRODUCT`, `QUOTE`, and `POSITIONS`
+together. For each open ticker:
+
+`mark_pnl = qty * ((last - avg_price) / tic_min) * tic_value`
+
+While `EXCHANGE_OPEN`, current equity is `available_balance` plus the sum of
+contract `realized_pnl` plus marked P&L. While closed, current equity is
+`available_balance` only; settlement has already folded P&L into it. Report
+`available_margin`, `is_restricted`, `trader_margin_state.risk_position`, and
+`net_oi` beside equity, while preserving positions by dated ticker.
+
+The display keeps the accounting story intact. While open, show settled
+balance, realized P&L, unrealized P&L, and marked equity separately. While
+closed, show the full session P&L beside the new closing balance and show
+unrealized P&L as zero. The closed-state `available_balance` already contains
+the mark-to-market result; do not add the still-visible realized P&L twice.
+
+Price presentation is user-defined. Native `P` sats per future USD implies
+`100,000,000 / P` forward USD/BTC. A today's-dollar view discounts that value
+from expiry using a current maturity-matched USD risk-free zero rate and names
+the source, observation time, tenor, day count, and interpolation. A spot view
+is fetched and labeled separately. Convert the requested dollar view with a
+current FX rate for JPY or another currency. Contract rolls remain two visible
+dated legs; read `SCHEDULES` and query each published ticker rather than silently
+substituting the active ticker.
+
 ## Withdraw (human web action)
 
 An agent never performs this action. The human chooses **Sidepit Account →

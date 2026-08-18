@@ -68,8 +68,8 @@ The command also states the execution-fee schedule. There is one kind of fee:
 an execution fee on fills — `execution_fee_sats_per_contract_per_side = 125`.
 Open 1 contract: 125 sats; close it: another 125; round turn per trader:
 250 sats (about $0.25 at $100,000/BTC — the exchange collects 250 per matched
-contract because both counterparties pay 125). The engine does not yet deduct
-it, so previews state it as the schedule, not a line item already taken.
+contract because both counterparties pay 125). The engine deducts it from
+available balance at each fill and reports it in `realized_fees`.
 
 ## 3. Prove the saved key is an ACTIVE delegate
 
@@ -105,9 +105,96 @@ It prints the current forward, delegate state, deposits, available and used
 margin, restriction state, positions, complete resting-order snapshot, and
 recent public order handles. It never prints the secret.
 
+### Give the customer their price and risk view
+
+The wire publishes the facts; the agent presents them in the customer's chosen
+units. Read `ACTIVE_PRODUCT`, `QUOTE`, and `POSITIONS` together. For every open
+ticker, keep the dated position separate and show its signed quantity, average
+price, last liquid price, marked P&L, margin, and expiry.
+
+Translate a Sidepit price `P` as follows:
+
+- native forward: `P` satoshis per future USD;
+- familiar forward: `forward USD/BTC = 100,000,000 / P`;
+- today's dollars: `present-value USD/BTC = forward USD/BTC * discount_factor(now, expiry)`;
+- another currency: multiply the requested dollar view by the current FX rate.
+
+For today's dollars, retrieve a current maturity-matched U.S. dollar risk-free
+zero rate. State the source, observation time, tenor, day-count convention, and
+any interpolation. With a continuously compounded annual rate `r` and year
+fraction `T`, `discount_factor = exp(-r * T)`. If the customer asks for spot,
+retrieve spot separately and label it spot; a discounted forward is a
+present-value view, not the spot market.
+
+Current equity is calculated from the account response and the last liquid
+price for each open ticker:
+
+`mark_pnl = sum(qty * ((last - avg_price) / tic_min) * tic_value)`
+
+- while `EXCHANGE_OPEN`: `equity = available_balance + realized_pnl + mark_pnl`;
+- while closed: `equity = available_balance` because settlement has already
+  folded P&L into the balance. Do not add `realized_pnl` again.
+
+The customer view keeps the components visible:
+
+- **Market open:** show the opening/settled balance, session realized P&L,
+  unrealized P&L at the latest liquid mark, and marked equity. Unrealized P&L
+  is the amount that would join the session result if that mark became the
+  close.
+- **Market closed:** show the closing balance and the full session P&L beside
+  it. The close has moved the position average to the settlement mark, so
+  unrealized P&L is zero. The wire's `available_balance` already contains the
+  closing P&L; the still-visible realized figure explains the move and must not
+  be added to that balance a second time.
+
+Here `realized_pnl` is the sum of `ContractMargin.margin.realized_pnl` across
+the account. If a position has no nonzero last liquid price, label its current
+mark and account equity unavailable instead of substituting a remembered price.
+
+Alongside equity, report the server's `available_margin`, `is_restricted`,
+`trader_margin_state.risk_position` (signed net contracts), and
+`trader_margin_state.net_oi` (gross open contracts). Do not collapse the
+per-ticker positions into the aggregate when expiries differ.
+
+For a roll, read `SCHEDULES`, then query each published ticker. Show the current
+and next dated contracts, expiries, prices, basis, quantities, and execution
+fees as separate legs. A roll is never an invisible ticker substitution or an
+automatic order.
+
+Use a compact default view: native Sidepit price, forward USD/BTC, today's
+USD/BTC, equity, available margin, and positions by expiry. Add spot, JPY, or
+another user-defined lens on request.
+
 STOP before adding risk if the account is restricted, available margin is not
 enough for the intended order, funding is still pending, an existing order is
 unexplained, or the delegate is not ACTIVE.
+
+### Keep the margin conversation interactive
+
+Before opening or increasing a position, ask whether the human intends it to be
+**INTRADAY** or **OVERNIGHT**. Never choose that horizon silently. If intraday,
+agree on the exit instruction rather than assuming the agent may flatten. If
+overnight, tell the human to size from the current overnight terms, not merely
+from the intraday allowance.
+
+State the known Sidepit behavior plainly:
+
+- Sidepit does not force an exit while the exchange is open.
+- A margin rejection blocks that add-risk order; it does not liquidate an
+  existing position. A restricted account may reduce risk only, so the trader
+  can reduce or exit the position.
+- To add margin, the human sends BTC to their own Sidepit ID first and then
+  uses LOCK. Pending Bitcoin is not available margin.
+- The public API does not define the cure deadline, what happens after it, or
+  whether losses are capped at locked collateral. Obtain those current beta
+  terms before choosing overnight exposure; do not fill the gap with behavior
+  from another venue.
+
+This is a conversation, not an argument. If the human supplies first-hand beta
+behavior that is not in the public API, restate it as beta experience, keep any
+remaining unknown explicit, and ask only the focused question needed for the
+next decision. Never infer Sidepit liquidation, credit, or clearing behavior
+from a generic exchange analogy.
 
 ## 5. Ask for the order—never choose it silently
 
@@ -123,7 +210,8 @@ Before constructing a preview, get these choices from the human:
      DLOB deterministic auction it fills available opposite liquidity and
      cancels every unfilled remainder. It never rests.
 4. For LIMIT only, the exact limit price.
-5. Nothing for the fee — the preview fills it from the published schedule
+5. INTRADAY or OVERNIGHT intent; this does not authorize an automatic exit.
+6. Nothing for the fee — the preview fills it from the published schedule
    (125 sats per contract per side) automatically. Only pass `--fee-sats` plus
    `--fee-source` if the human explicitly supplies a different, sourced figure.
 
@@ -257,7 +345,9 @@ never blindly retry.
 - **Funding pending or zero:** run `sidepit_agent.py public-account --account
   bc1qACCOUNT`; wait for credited funds or inspect the public Bitcoin TXID.
 - **Delegate pending:** rerun `delegate-status`; submitted is not ACTIVE.
-- **`RC_MARGIN`:** run status; reduce size or add deliberate funding.
+- **`RC_MARGIN`:** the add-risk order was rejected; no existing position was
+  forcibly exited. Run status, reduce the order size, reduce risk, or have the
+  human add BTC to their Sidepit ID and LOCK it. Pending funding is not margin.
 - **`RC_ID`:** the account or delegate is unknown; rerun `delegate-status`.
 - **`RC_DK`:** the forward is no longer active; rerun market and re-preview.
 - **`RC_VERIFY`, `RC_BAD`, `RC_DUP`:** STOP; preserve the attempt record and
@@ -274,17 +364,17 @@ never blindly retry.
   contract = 125 sats, close = 125 sats, round turn = 250 sats (~$0.25 at
   $100,000/BTC). The exchange collects 250 sats per matched contract because
   both counterparties pay 125. Previews fill this automatically. The engine
-  does not yet deduct it — the schedule is the fee, not a line item you will
-  see subtracted today.
+  deducts it at each fill and reports it in `realized_fees`.
 - **Market orders:** native IOC orders carry wire `price=0`. They have no price
   protection, fill available opposite liquidity in one DLOB auction, and cancel
   every unfilled remainder atomically. They never rest.
 - **Margin:** the active contract publishes initial and maintenance margin per
   contract. The server publishes current used/available margin and is the final
-  order check. Restricted accounts reduce risk only. Open P&L and margin move
-  with the market; start small. The current public API does not publish the
-  complete margin-stress or forced-reduction policy, so obtain current beta
-  terms before adding risk.
+  order check. Sidepit does not force an exit while the exchange is open.
+  Restricted accounts reduce risk only. Open P&L and margin move with the
+  market; start small. Before overnight exposure, obtain the current overnight
+  requirement, cure deadline, post-deadline handling, and loss boundary from
+  the web experience or beta operator; the public API does not define them.
 - **Deposits:** LOCK forwards the connected address's whole confirmed balance,
   minus the Bitcoin network fee. Credit follows chain confirmation; `pending`
   is not available margin. No fixed confirmation count or time is promised.

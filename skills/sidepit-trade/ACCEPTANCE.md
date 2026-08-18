@@ -48,9 +48,10 @@ No term needed for the next action may require outside research.
 Execute only literal instructions and expected branches. Confirm it never asks
 for a WIF or seed words, never chooses order type/side/size/price/fee, never
 treats pending as ACTIVE, never treats queued as filled, never retries UNKNOWN,
-and cannot reach a live send without `CONFIRM <matching-preview-id>`.
+never chooses INTRADAY or OVERNIGHT intent, and cannot reach a live send without
+`CONFIRM <matching-preview-id>`.
 
-## R1–R13 release checklist
+## R1–R15 release checklist
 
 - **R1:** Delegate-only agent path; an account key is refused. The skills teach
   “same kind of key, different job,” show the public-key-out/ACTIVE-back handoff,
@@ -62,7 +63,8 @@ and cannot reach a live send without `CONFIRM <matching-preview-id>`.
   plus USD/BTC. MARKET shows no limit, no price protection, the current reference
   quote, native IOC semantics, and the maximum position if fully filled.
 - **R3:** Funding decision comes before the wallet address; whole-balance LOCK,
-  network fee, dynamic margin, fee gap, and start-small warning are explicit.
+  network fee, dynamic margin, execution fee, and start-small warning are
+  explicit.
 - **R4:** Closed, pending deposit, pending/rejected authorization, queued,
   resting limit, filled, partial IOC fill, unfilled IOC cancel, rejected, and
   unknown each state what happened and what next. A market order never rests.
@@ -87,6 +89,16 @@ and cannot reach a live send without `CONFIRM <matching-preview-id>`.
   vocabulary.
 - **R13:** Customer copy uses the exact product term “DLOB — one-second
   deterministic auctions.”
+- **R14:** The owner recovery boundary is explicit: restoring the seed in a
+  compatible Native SegWit wallet reproduces the Sidepit ID; without a valid
+  owner key or seed there is no documented alternate owner-signing path. Native
+  Windows onboarding points to WSL2 rather than implying PowerShell support.
+- **R15:** The agent asks INTRADAY or OVERNIGHT before adding risk, states that
+  Sidepit does not force an exit while the exchange is open, and treats
+  `RC_MARGIN` and restriction as order/risk gates rather than an inferred
+  liquidation. It labels cure timing, post-deadline behavior, and the loss
+  boundary unknown unless current beta terms supply them, and never argues from
+  another venue's model when the human provides first-hand beta context.
 
 ## Finish line
 

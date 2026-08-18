@@ -18,6 +18,9 @@ browser, the UniSat Chrome extension, a Native SegWit Bitcoin address (starts
 venue: never fund, sign, or authorize without the human at the relevant screen.
 A sat is one hundred-millionth of a Bitcoin.
 
+The commands and key-file permission checks are POSIX-native. On Windows, use
+WSL2 for this workflow; native PowerShell is not a supported onboarding path.
+
 Read the paired [acceptance test](../sidepit-trade/ACCEPTANCE.md) before real
 money moves. If any step asks for a private key, WIF, or seed words, STOP. A WIF
 is a secret spending key; it and seed words never enter an agent, chat, command
@@ -89,18 +92,17 @@ Tell the human these facts before opening a wallet:
    recommended deposit. Adverse P&L and fees also consume margin.
 2. Trading costs one kind of fee: an execution fee on fills — 125 sats per
    contract per side, so a full open-and-close round turn costs the trader
-   250 sats (~$0.25 at $100,000/BTC). The engine does not yet deduct it; the
-   schedule is stated so the human can size deposits. There is no published
+   250 sats (~$0.25 at $100,000/BTC). The engine deducts it at each fill. There is no published
    universal safety buffer — size conservatively.
 3. LOCK forwards the connected address's entire confirmed on-chain balance to
    Sidepit; the Bitcoin network fee comes out of that balance. Use a dedicated
    `bc1q` address holding only the amount the human intends to lock.
 4. Start small. Dated forwards can lose BTC. A margin-restricted account may
    only reduce risk; the server is the final margin check.
-5. Confirm the human is eligible for the beta and obtain the current margin
-   stress/forced-reduction terms from the web experience or beta operator. The
-   public API reports restriction state but does not publish that policy. If
-   the terms are unavailable, STOP before funding.
+5. Confirm the human is eligible for the beta. If they may carry a position
+   overnight, obtain the current overnight requirement, cure deadline,
+   post-deadline handling, and loss boundary from the web experience or beta
+   operator. If those terms are unavailable, STOP before overnight exposure.
 
 Do not use a remembered minimum such as `0.002 BTC`. Contract margin changes;
 the live contract response above is the current source.
@@ -120,6 +122,12 @@ The human performs this section in the browser:
 
 If the site asks the human to paste a private key or seed words, STOP. The
 expected flow asks UniSat to sign inside the extension.
+
+Those seed words are the owner's recovery path. Restoring them in a compatible
+wallet with the same Native SegWit account reproduces the Sidepit ID and lets
+the human reconnect. Without a valid owner key or its seed backup, there is no
+documented alternate way to sign owner actions. The agent's replaceable trading
+key cannot recover, move, unlock, authorize, or revoke the human's Bitcoin.
 
 ## 4. Human: fund and LOCK exactly what was chosen
 
