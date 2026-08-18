@@ -8,10 +8,20 @@ description: "Trade a funded Sidepit account through an ACTIVE, trading-only del
 You need an ACTIVE delegate key. If you do not have one, run the
 `sidepit-locals` skill first.
 
+You are now in the trading room. Use this mental model: **same kind of key,
+different job**. The account key is the human's money key; this delegate key is
+the agent's replaceable trading pass. The public handoff is complete—agent
+public key out, ACTIVE result back—and the server now limits this key to
+trading and canceling.
+
 This is real mainnet Bitcoin and a real exchange. The agent loads only a
 protected, trading-only key. It refuses an account key. No live order is sent
 until the human sees a specific preview and replies `CONFIRM <preview-id>`.
 Order, preview, attempt, and result records survive a fresh shell.
+
+Losing or destroying this trading pass does not lose the human's Bitcoin; the
+human can revoke its public ID and authorize a replacement. Existing orders and
+positions remain. If another copy survives, it can trade until revoked.
 
 In the first 30 seconds, know the product:
 

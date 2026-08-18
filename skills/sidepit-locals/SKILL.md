@@ -5,7 +5,7 @@ description: "Onboard a human to Sidepit without exposing the account key: enter
 
 # Sidepit Locals — the human gets into the pits
 
-Secure your Bitcoin from the big bad AI agents — with your own local AI agent.
+Give your AI agent a trading pass—not your Bitcoin key.
 
 You keep the money key. Your agent creates a different, trading-only key that
 you can revoke. The protocol lets that key trade and prevents it from
@@ -39,14 +39,23 @@ address's public key from the transaction input. An external wallet or exchange
 sending straight to the lock address does not identify the intended account. If
 any instruction says to skip the Sidepit ID, STOP and do not send.
 
-## The wall: two people, two keys, two crossings
+## The boundary: two rooms, one public handoff
 
-- The human's account key stays inside UniSat. It controls funds, agent
-  authorization, revocation, and unlock requests.
-- The agent's separate key lives in one protected local file. It can place and
-  cancel orders for the account. It cannot withdraw, authorize, or revoke.
-- Exactly two public facts cross the wall: the agent's public key goes to the
-  human; an ACTIVE result comes back to the agent. Nothing secret crosses.
+Use this mental model: **same kind of key, different job**. Handle a key for
+the job Sidepit allows it to do; two keys that look alike can carry very
+different authority.
+
+- **Wallet room:** the human's money key stays inside UniSat. It controls
+  Bitcoin movements and agent permissions; the agent never receives it.
+- **Trading room:** the agent creates and manages its own replaceable trading
+  pass. It can place and cancel orders, but cannot withdraw, authorize, or
+  revoke.
+- **The handoff:** the agent gives the human its public key; the human signs the
+  authorization in UniSat; an ACTIVE result comes back. Nothing secret crosses.
+
+Losing or destroying the trading pass does not lose the human's Bitcoin. The
+human revokes its public ID and authorizes a replacement. Existing orders and
+positions remain, and any surviving copy can trade until it is revoked.
 
 ## 1. Prove the client before onboarding
 
@@ -158,9 +167,12 @@ the secret. Check:
 - the saved path is a new file with mode `0600`, meaning only the current
   operating-system user can read or write it.
 
-On any mismatch, STOP. Do not inspect, modify, replace, or delete a key file.
-Give the human the public key and derived `trader_id`; keep the saved path for
-the ACTIVE check. A minimal prompt the web UI may show is:
+On any mismatch, STOP. Do not inspect, display, log, transmit, or overwrite the
+key file. This is the agent's replaceable trading pass, so it may live in the
+agent's normal protected local storage; a backup is for trading continuity,
+not Bitcoin recovery. Give the human the public key and derived `trader_id`;
+keep the saved path for the ACTIVE check. A minimal prompt the web UI may show
+is:
 
 > Generate and securely store one new Sidepit trading-only agent identity
 > locally for account `bc1q…`. Never display or log the private key. Give me

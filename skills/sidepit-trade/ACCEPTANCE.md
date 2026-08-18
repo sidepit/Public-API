@@ -40,7 +40,8 @@ Within 30 seconds, the human must know what they will accomplish, required
 tools/time, real-BTC risk, whole-balance LOCK behavior, the execution fee
 (125 sats per contract per side), and the key boundary. They must understand this sentence after one
 read: “I keep the money key; my agent gets a revocable trading key that cannot
-withdraw.” No term needed for the next action may require outside research.
+withdraw. It is a replaceable trading pass: losing it does not lose my Bitcoin.”
+No term needed for the next action may require outside research.
 
 ### P3 — literal small model
 
@@ -51,7 +52,10 @@ and cannot reach a live send without `CONFIRM <matching-preview-id>`.
 
 ## R1–R13 release checklist
 
-- **R1:** Delegate-only agent path; an account key is refused.
+- **R1:** Delegate-only agent path; an account key is refused. The skills teach
+  “same kind of key, different job,” show the public-key-out/ACTIVE-back handoff,
+  and explain that a destroyed trading key does not lose Bitcoin. Existing
+  orders and positions survive, and a copied key can trade until revoked.
 - **R2:** Every live order shows direction, contracts, USD and BTC-equivalent
   exposure, projected position, margin used/needed/available, numeric fee/source,
   execution expectation, and exact confirm. LIMIT shows its exact inverse price
