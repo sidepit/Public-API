@@ -1,22 +1,38 @@
-# Sidepit Python SDK
+# Sidepit — fair electronic pits for agents and humans
 
-The official Python SDK for [Sidepit](https://sidepit.com) — **Bitcoin-margined
-forwards**, cleared in one-second batch auctions. Best price wins; fastest
-machine does not. Deposit Bitcoin → trade → get your Bitcoin back.
+**You keep the money key. Your agent gets a trading-only key you can revoke.**
+That separation is enforced by the protocol: the agent can trade and cancel;
+it cannot withdraw Bitcoin or authorize another agent.
 
-Your Bitcoin address IS your account. Your keys never leave your machine.
+[Sidepit](https://sidepit.com) is a Bitcoin-margined **forwards** exchange. DLOB
+runs one-second deterministic auctions that make speed irrelevant: best price
+wins, not the fastest machine. Your Bitcoin address is your account—no email,
+password, or API-key signup—and unlocked Bitcoin returns only to that address.
 
-## Point your agent at it
+The pair of public skills is the product journey:
 
-This repo is built to be driven by an AI agent. Give your agent the repo and say:
+1. [`sidepit-onboarding`](skills/sidepit-onboarding/SKILL.md) helps the human enter beta
+   code `sidepit2025`, connect a Native SegWit UniSat wallet, fund deliberately,
+   authorize a locally created agent key, and verify it ACTIVE.
+2. [`sidepit-trade`](skills/sidepit-trade/SKILL.md) loads only that restricted
+   key, previews exposure, published margin allowance, user-verified fee, and
+   either an exact limit or a market order, previews the exposure,
+   trades, reconciles, and flattens.
 
-> Clone https://github.com/sidepit/Public-API, read `AGENTS.md`, and show me
-> the live quote.
+Together: send Bitcoin to your Sidepit ID → LOCK it to the exchange → trade →
+unlock it back to that same address. Your agent earns its edge from its risk
+model on a market designed for fair price discovery—not from faster fiber.
 
-`AGENTS.md` is the agent's entry door; `skills/sidepit-trade/` is a
-step-by-step trading skill with exact commands and expected output.
+> **Funding rule:** never send BTC from an external wallet or exchange directly
+> to Sidepit's deposit/lock address. Send it to your own connected `bc1q`
+> Sidepit ID first; after it arrives, LOCK — sweep that balance to the
+> deposit address.
 
-## Quickstart (no keys, 2 minutes)
+The LOCK transaction tells Sidepit which account to credit: its input must spend
+from the Sidepit ID controlled by the customer. An external wallet or exchange
+sending straight to the lock address does not identify the intended account.
+
+## Look before you trust (no keys, about 2 minutes)
 
 ```sh
 git clone --recurse-submodules https://github.com/sidepit/Public-API && cd Public-API
@@ -25,61 +41,31 @@ python-client/.venv/bin/pip install -r python-client/requirements.txt
 python-client/.venv/bin/python examples/quickstart.py
 ```
 
-```
-exchange EXCHANGE_OPEN · session 1783296000000 · active contract USDBTCU26
-bid 3x1555 · ask 1556x3 · last 1572 (~$63,613/BTC)
-```
+Expected: named exchange state, live dated forward and expiry, bid/ask, familiar
+USD/BTC translation, one contract's USD exposure, and current margins. Live
+production data, zero credentials. Native prices are **satoshis per USD**
+(inverse): `USD/BTC = 100,000,000 / price`.
 
-Live production data, zero credentials. Prices are **sats-per-USD** (inverse):
-`USD/BTC = 1e8 / price`.
+## Point your agent at the right door
 
-## Where keys come from
+New account or agent authorization:
 
-There is one venue — production, real Bitcoin. Three rules:
+> Clone https://github.com/sidepit/Public-API with submodules, read
+> `skills/sidepit-onboarding/SKILL.md`, and onboard me without ever asking for my
+> wallet key or seed words.
 
-1. **Generate your key locally** — `python -m sidepit_trader.wallet new`
-   (run from `python-client/`). The private key never leaves your machine;
-   the bc1q address it prints is your `sidepit_id` — your account.
-2. **Deposit to your own address first** — move BTC to it yourself, and never
-   fund from an address whose keys you don't control.
-3. **Fund the exchange from it, then keep trading with those same keys** —
-   the key that owns the address is the key that signs. The TUI's LOCK button
-   (or `wallet.build_lock_tx()`) forwards your balance; you're credited once
-   it confirms. Withdrawals return to the same address — there is no
-   destination field to mistype, by design.
+Already have an ACTIVE trading-only key:
 
-## Trade
+> Read `skills/sidepit-trade/SKILL.md`. Show my current account and an order
+> preview, but preview it for me, then send it.
 
-```sh
-cd python-client
-SIDEPIT_ID=bc1q... SIDEPIT_WIF=... .venv/bin/python sidepit_trader/examples/hello_taker.py
-```
+The first skill keeps the human's wallet inside UniSat. The second reads the
+agent's protected 0600 file without sourcing it or displaying the secret.
+Every live order gets a durable public preview and matching preview;
+attempt and result records make reconnects and ambiguous sends recoverable.
 
-```python
-from sidepit_trader import signer_from_env, Submitter, RequestClient
-
-sub = Submitter(signer_from_env(), "api.sidepit.com")
-orderid = sub.new_order(side=1, size=1, price=1555, ticker="USDBTCU26")
-# orderid = "bc1q...:1783296012345678901" — the handle on every feed
-
-req = RequestClient()          # point-in-time account check after an order
-tp = req.positions("bc1q...")  # positions, balances, margin, your fills
-```
-
-Orders return the full orderid string; outcomes (fills, rejects) arrive on the
-feeds. The reqrep door (12125) gives point-in-time account state; the streams
-give continuous updates. Rejects arrive on 12128 with named codes
-(`RC_MARGIN` = fund the account).
-
-**Humans:** `users-cli/` is *sidepit // cockpit* — a full terminal app:
-create account, fund, trade, delegate, withdraw.
-
-**Agents (recommended):** delegate. Your key appoints an agent key that can
-trade but can never withdraw, appoint, or revoke — protocol-enforced. Hand the
-agent key to your bot freely; revoke any time.
-`Submitter.register_delegate(delegate_pubkey=...)`, then the agent signs with
-`Signer.as_delegate(...)` — the env handoff is just
-`SIDEPIT_WIF=<agent key> SIDEPIT_ID=<your account>`.
+Execution fees are 125 sats per contract per side of each fill. The engine
+deducts them from available balance and reports them in `realized_fees`.
 
 ## Repo map
 
@@ -88,9 +74,10 @@ agent key to your bot freely; revoke any time.
 | `python-client/sidepit_trader/` | the SDK — signing, feeds, orders, wallet, `Trader` base class |
 | `python-client/proto/` | generated protobuf stub (from the pinned proto) |
 | `examples/` | start here — keyless quickstart |
-| `skills/sidepit-trade/` | agent skill: onboard → read market → order → position → exit |
+| `skills/sidepit-onboarding/` | human onboarding: UniSat, TUI, or manual → funded account → ACTIVE agent key |
+| `skills/sidepit-trade/` | agent trading: preview → send → reconcile → flatten |
 | `AGENTS.md` | agent orientation: wire surface, message shapes, conventions |
-| `users-cli/` | the trading TUI for humans |
+| `users-cli/` | advanced terminal trading app |
 | `Public-API-Data/` | **the contract**: `sidepit_api.proto` (submodule) — every message the exchange speaks |
 | `python-client/facade/` | optional local REST/WS gateway over the wire |
 | `integrations/ccxt/` | CCXT adapter (runs over the facade) |

@@ -1,7 +1,7 @@
 # CLAUDE.md — Public-API
 
 The Python client stack for [Sidepit](https://sidepit.com): Bitcoin-margined
-forwards, one-second batch auctions.
+forwards, DLOB one-second deterministic auctions.
 
 **Start at `AGENTS.md`** — the agent orientation (wire surface, signing,
 message shapes). A guided trading walkthrough lives in

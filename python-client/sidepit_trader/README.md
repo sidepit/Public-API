@@ -26,6 +26,11 @@ fills, and positions. `Trader` is the synchronous feed-reactor base; you overrid
 | `store.py`   | `TakerStore` — bars + identity + session-backfill bookkeeping (SQLite) |
 | `examples/`  | `hello_market_data`, `hello_positions`, `hello_crossover`, `hello_taker` |
 
+`Submitter.market_order(side, size, ticker)` is native immediate-or-cancel. It
+serializes the same `NewOrder` as a limit order but omits price (proto3 wire
+`price=0`); it fills available opposite liquidity in the next DLOB auction and
+cancels every unfilled remainder atomically.
+
 ## Run
 
 ```sh

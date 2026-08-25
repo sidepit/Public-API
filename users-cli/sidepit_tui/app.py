@@ -2,7 +2,8 @@
 
 Implements the TUI-Design-Handoff (2026-06-10): three-panel cockpit, prompt +
 tagged-log loop as the primary surface, transparent 5-level book with depth
-shading and the 1-second auction countdown, BTC-denominated risk envelope.
+shading and the DLOB one-second deterministic-auction countdown,
+BTC-denominated risk envelope.
 Where the mockup and the real exchange disagree, the real exchange wins:
 dated inverse forwards (no perps), 1s epochs (no µs theater), and honest
 delegation status instead of fictional ML-KEM pairing.
@@ -481,12 +482,22 @@ class SidepitApp(App):
             qrw.update(qr_unicode(s.address))
             qrw._qr_done = True
         self._update_fund_buttons(s)
-        self._q("#fund-state", Static).update(
+        ulines = [
             f"equity {btc(equity)} (${eq_usd:,.2f}) · withdrawable now "
-            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}\n"
-            f"[{DIM}]unlock lifecycle: PENDING → RESERVED (margin debited) → "
-            f"COMPLETED (BTC arrives at your address) · one open unlock per "
-            f"account · rejected unlocks appear in the unlock records[/]")
+            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}",
+            f"[{DIM}]unlock lifecycle: RESERVED (margin debited) → PROCESSING "
+            f"(BTC broadcast) → COMPLETED — or REJECTED · one open unlock per "
+            f"account[/]"]
+        for u in s.unlock_records[-5:]:
+            st = u["status_name"].removeprefix("UNLOCK_")
+            c = (GREEN if st == "COMPLETED" else RED if st == "REJECTED" else GOLD)
+            row = (f"[{c}]{st}[/] {btc(u['amount_sats'])}"
+                   f" [{DIM}]{u['oid'][-14:]}[/]")
+            if u["btc_txid"]:
+                row += (f" [link=https://mempool.space/tx/{u['btc_txid']}]"
+                        f"mempool.space/tx/{u['btc_txid'][:12]}…[/link]")
+            ulines.append(row)
+        self._q("#fund-state", Static).update("\n".join(ulines))
         dt = self._q("#delegates", DataTable)
         dt.clear()
         for d in s.delegates:
@@ -567,9 +578,9 @@ class SidepitApp(App):
 
     @ui_update
     def _refresh_book(self) -> None:
-        """5-level transparent book + spread bar with the 1s auction countdown."""
+        """5-level transparent book + spread bar with the DLOB countdown."""
         s = self.snap
-        out = [title("book · transparent · 1s auctions")]
+        out = [title("book · transparent · DLOB 1s deterministic auctions")]
         if not s.depth_bids and not s.depth_asks:
             out.append(f"[{DIM}]no live book (exchange {s.state})[/]")
         else:

@@ -61,7 +61,13 @@ await t('fetchPositions', () => readonly.fetchPositions());
 await t('fetchOpenOrders', () => readonly.fetchOpenOrders());
 await t('fetchMyTrades', async () => (await readonly.fetchMyTrades(sym, undefined, 1)).map(x => [x.side, x.price]));
 await t('fetchOrder(bogus->OrderNotFound)', () => ex.fetchOrder('bc1qbogus:1'), 'OrderNotFound');
-await t('createOrder(market->NotSupported)', () => ex.createOrder(sym, 'market', 'buy', 1), 'NotSupported');
+await t('createMarketOrder advertised', async () => ex.has.createMarketOrder);
+await t('market wire omits price field', async () => {
+    const wire = ex.serializeNewOrder(1, 1, 0, 'X');
+    const expected = [88, 2, 160, 1, 1, 194, 2, 1, 88];
+    if (JSON.stringify(wire) !== JSON.stringify(expected)) throw new Error('unexpected market wire: ' + JSON.stringify(wire));
+    return wire;
+});
 
 if (open) {
     await t('fetchTicker', async () => { const tk = await ex.fetchTicker(sym); return [tk.bid, tk.ask, tk.last]; });

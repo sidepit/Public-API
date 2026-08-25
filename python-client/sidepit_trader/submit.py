@@ -96,26 +96,16 @@ class Submitter:
         self._push(self._signer.sign(tx))
         return order_id(self._signer.sidepit_id, ts)
 
-    def market_order(self, side: int, size: int, ticker: str, *,
-                     bid: int = 0, ask: int = 0, last: int = 0,
-                     cross_ticks: int = 2, timestamp_ns: int | None = None):
-        """Submit a 'market' order — set-and-forget. Sidepit has no native market type,
-        so 'market' = a marketable limit placed `cross_ticks` THROUGH the opposite touch
-        (buy at ask+cross, sell at bid-cross). This call owns the cross so callers just
-        pass the current quote. If the touch side is empty, fall back across last/other
-        side so we still cross something. Returns (orderid, price) — orderid is the full
-        `"{sidepit_id}:{timestamp_ns}"` string; on a bad price (<=0) returns
-        (None, price) and sends nothing."""
-        if side > 0:
-            ref = ask or last or bid
-            price = ref + cross_ticks
-        else:
-            ref = bid or last or ask
-            price = ref - cross_ticks
-        if price <= 0:
-            return None, price
-        oid = self.new_order(side, size, price, ticker, timestamp_ns=timestamp_ns)
-        return oid, price
+    def market_order(self, side: int, size: int, ticker: str,
+                     timestamp_ns: int | None = None) -> str:
+        """Submit a native immediate-or-cancel market order.
+
+        On the wire this is exactly ``NewOrder{price=0}``. It participates in the
+        next one-second DLOB deterministic auction, fills against available
+        opposite liquidity, and atomically cancels any unfilled remainder. Returns
+        the same full orderid string as :meth:`new_order`.
+        """
+        return self.new_order(side, size, 0, ticker, timestamp_ns=timestamp_ns)
 
     def cancel(self, orderid: str, timestamp_ns: int | None = None) -> str:
         """Submit a cancel for `orderid`. Returns the cancel transaction's own

@@ -35,17 +35,14 @@ def test_new_order_returns_full_orderid(sub, ident):
 
 
 def test_market_order_returns_full_orderid(sub, ident):
-    oid, px = sub.market_order(side=1, size=1, ticker="USDBTCM26",
-                               bid=1499, ask=1500, last=1499)
-    assert px == 1502
+    oid = sub.market_order(side=1, size=1, ticker="USDBTCM26")
     assert oid.startswith(ident.sidepit_id + ":")
-
-
-def test_market_order_bad_price_sends_nothing(sub):
-    oid, px = sub.market_order(side=-1, size=1, ticker="USDBTCM26",
-                               bid=0, ask=0, last=0)
-    assert oid is None
-    assert sub._sent == []
+    tx = sub._sent[0].transaction.new_order
+    assert tx.price == 0
+    assert tx.side == 1
+    assert tx.size == 1
+    assert tx.ticker == "USDBTCM26"
+    assert "price" not in {field.name for field, _value in tx.ListFields()}
 
 
 def test_cancel_returns_cancel_txs_own_orderid(sub, ident):

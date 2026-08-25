@@ -32,12 +32,14 @@ pro import + `pro` map entry, alphabetical (`poloniex` … `sidepit` … `tokocr
 
 ## Semantics preserved (not flattened)
 
-- **Nothing resolves instantly.** 1-second sequenced-batch epochs; `createOrder` returns
+- **Nothing resolves on submission.** DLOB one-second deterministic auctions;
+  `createOrder` returns
   `status: 'open'` optimistically with the deterministic id
   `{sidepit_id}:{timestamp_ns}` (strictly increasing ns nonce); outcomes are
   observational via `fetchOrder` / `fetchOpenOrders` / `watchOrders` / `fetchRejections`.
-- **Limit orders only** (`has.createMarketOrder = false`): market-order fills would be
-  salt-dependent under per-epoch sequencing.
+- **Native IOC market orders** (`has.createMarketOrder = true`): omit price;
+  `NewOrder.price=0` takes available opposite liquidity and cancels every
+  unfilled remainder in that auction.
 - **Prices**: native sats-per-USD → unified BTC-per-USD (`× 1e-8`), converted exactly
   once (`satsToPrice` / `priceToSats`). Markets are explicit `USD/BTC:BTC-<expiry>`,
   inverse dated forwards.
@@ -68,9 +70,8 @@ Transpiler constraints honored (regex-based): no `for…of`, no floating comment
 methods, no blank lines inside methods, no `return new X()` (use
 `throwExactlyMatchedException`), no BigInt.
 
-Status: **20/20 smoke checks pass against production during a live session** with a funded
-account (set `SIDEPIT_ID` + `SIDEPIT_WIF` in the env for the funded write path; falls back
-to a throwaway key otherwise) — including the full client-signed relay cycle: createOrder
-→ epoch-confirmed `open` → cancelOrder → epoch-confirmed `canceled`, and watchTicker over
-WS. The 16-check closed-hours branch runs automatically outside session hours. Not yet
-submitted upstream — that is a later step.
+The smoke run covers closed-hours reads and, with an explicitly funded identity,
+the full client-signed relay cycle: createOrder → observed outcome → cancelOrder
+→ observed cancellation, plus watchTicker over WS. It also verifies offline that
+the native market wire omits the protobuf price field. Not yet submitted
+upstream—that is a later step.

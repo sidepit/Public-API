@@ -15,3 +15,16 @@ class CourierRuleError(SidepitError, ValueError):
     revoke_delegate). Account verbs are custody-signed — a delegate cannot
     appoint, revoke, or withdraw (the courier rule). Also a ValueError so
     pre-existing `except ValueError` handlers keep working."""
+
+
+class DoorRejectedError(SidepitError):
+    """The 12125 door refused to inbox an account verb — the REP receipt came
+    back with a non-zero reject_code (ReplyRequest.reject_code, e.g. the durable
+    AccountOpWriter write failed). The verb was NOT queued; nothing will apply.
+    Distinct from a terminal rejection AFTER intake, which is served on the
+    request's own receipt (AccountRequest.reject_code via account_requests())."""
+
+    def __init__(self, code: int, code_name: str):
+        self.code = code
+        self.code_name = code_name
+        super().__init__(f"account-verb door rejected the submit: {code_name}")

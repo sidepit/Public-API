@@ -6,7 +6,8 @@ The emergency-exit / end-of-strategy tool, runnable directly:
 
 Order list comes from the SNAPSHOT sync (12129) — the complete list of resting
 orders for an account. Net position comes from accountstate
-(contract_margins -> positions). Residual position is closed with a marketable limit.
+(contract_margins -> positions). Residual position is closed with a native IOC
+market order.
 """
 import logging
 import os
@@ -34,8 +35,7 @@ def net_positions(req: RequestClient, sidepit_id: str) -> dict:
     return out
 
 
-def flatten(signer: Signer, host: str, *, cross_ticks: int = 2,
-            settle_secs: float = 3.0) -> bool:
+def flatten(signer: Signer, host: str, *, settle_secs: float = 3.0) -> bool:
     """Cancel all resting orders, close all net positions, return True when flat."""
     sid = signer.sidepit_id
     req = RequestClient(host)
@@ -49,20 +49,18 @@ def flatten(signer: Signer, host: str, *, cross_ticks: int = 2,
         log.info("canceled %d resting order(s)", len(orders))
         time.sleep(settle_secs)   # let the cancels land in an epoch
 
-    # 2. Close any net position with a marketable limit per ticker.
+    # 2. Close any net position with a native IOC market order per ticker.
     for ticker, net in net_positions(req, sid).items():
-        q = req.quote(ticker).quote
         side = -1 if net > 0 else 1
-        oid, px = sub.market_order(side, abs(net), ticker, bid=q.bid, ask=q.ask,
-                                   last=q.last, cross_ticks=cross_ticks)
-        log.info("closing %+d %s with %s %d @ %s", net, ticker,
-                 "SELL" if side < 0 else "BUY", abs(net), px)
+        oid = sub.market_order(side, abs(net), ticker)
+        log.info("closing %+d %s with IOC MARKET %s %d (%s)", net, ticker,
+                 "SELL" if side < 0 else "BUY", abs(net), oid)
     time.sleep(settle_secs)
 
     # 3. Verify.
     remaining = net_positions(req, sid)
     leftovers, _ = snapshot_sync(host, sidepit_id=sid)
-    for oid in leftovers:         # e.g. our own close order resting unfilled
+    for oid in leftovers:         # defensive: IOC close orders themselves never rest
         sub.cancel(oid)
     flat = not remaining
     log.info("flatten %s: positions=%s open_orders=%d", "OK" if flat else "INCOMPLETE",

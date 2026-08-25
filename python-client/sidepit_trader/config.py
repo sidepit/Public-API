@@ -22,6 +22,14 @@ PROD_HOST = "api.sidepit.com"
 PROD_KEYS_DIR = Path("~/.sidepit/keys").expanduser()
 PROD_STATE_DB = Path("~/.sidepit/state.db").expanduser()
 
+# Execution-fee schedule (ruled 2026-08-17). ONE kind of fee — an execution
+# fee on fills, per contract, per side, per trader: open 125 + close 125 =
+# 250 sats round turn per trader; the exchange collects 250 per matched
+# contract (both counterparties pay 125). The engine deducts it live at
+# each fill (verified in production 2026-08-25) — this is the published schedule and the
+# currently-deducted line item.
+EXECUTION_FEE_SATS_PER_CONTRACT_PER_SIDE = 125  # deducted by the engine at each fill
+
 # chain infra — same on mainnet regardless (the test IS real mainnet BTC)
 ESPLORA = "https://blockstream.info/api"
 MEMPOOL_FEES = "https://mempool.space/api/v1/fees/recommended"

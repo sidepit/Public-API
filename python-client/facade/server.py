@@ -187,13 +187,15 @@ def _track_order(oid: str, o: dict) -> None:
 def _order_dict(oid: str, ticker: str, side: int, amount: int, price: int, ts_ns: int):
     return {
         "orderid": oid, "ticker": ticker, "side": "buy" if side > 0 else "sell",
-        "price": price, "amount": amount, "filled": 0, "remaining": amount,
+        "type": "market" if price == 0 else "limit",
+        "price": None if price == 0 else price,
+        "wire_price": price, "amount": amount, "filled": 0, "remaining": amount,
         "status": "open",            # open|closed|canceled|rejected
         "timestamp_ns": ts_ns, "timestamp_ms": ts_ns // 1_000_000,
         "average_fill_price": None, "reject_code": None, "reject_expected": None,
         "cancel_requested_ns": None,
-        "note": "sequenced-batch venue: status is observational (order feed/reject feed); "
-                "orders resolve at the next 1s epoch, never instantly",
+        "note": "DLOB venue: status is observational (order feed/reject feed); "
+                "orders resolve in the next one-second deterministic auction",
     }
 
 
@@ -532,7 +534,7 @@ def _build_markets():
         markets.append({
             "id": p.ticker,
             # explicit, not inferred: USD priced in satoshis, margined/settled in BTC —
-            # an inverse DATED future (not a perp)
+            # an inverse DATED forward (not a perp)
             "base": "USD", "quote": "BTC", "settle": "BTC",
             "type": "future", "inverse": True, "linear": False,
             "contract_symbol": c.symbol, "active": p.is_active,
@@ -816,7 +818,7 @@ class NewOrderReq(BaseModel):
     symbol: str
     side: str            # "buy" | "sell"
     amount: int          # contracts, positive
-    price: int           # sats-per-USD (limit only — no market orders in v1)
+    price: int | None = None  # sats-per-USD for limit; omit for native IOC market
     type: str = "limit"
 
 
@@ -827,20 +829,27 @@ def post_order(o: NewOrderReq):
     if _a_submitter is None:
         raise HTTPException(400, "server-signed orders disabled (no key configured); "
                                  "use POST /relay with a client-signed transaction")
-    if o.type != "limit":
-        raise HTTPException(400, "limit orders only: fills on this venue are decided by "
-                                 "the per-epoch sequencing auction, so 'market' has no "
-                                 "defined price — cross with a priced limit instead")
+    order_type = o.type.lower()
+    if order_type not in ("limit", "market"):
+        raise HTTPException(400, "type must be 'limit' or 'market'")
     if o.side not in ("buy", "sell"):
         raise HTTPException(400, "side must be 'buy' or 'sell'")
-    if o.amount <= 0 or o.price <= 0:
-        raise HTTPException(400, "amount and price must be positive integers "
-                                 "(price is sats-per-USD)")
+    if o.amount <= 0:
+        raise HTTPException(400, "amount must be a positive integer contract count")
+    if order_type == "limit" and (o.price is None or o.price <= 0):
+        raise HTTPException(400, "limit orders require a positive integer price "
+                                 "in sats per USD")
+    if order_type == "market" and o.price is not None:
+        raise HTTPException(400, "market orders omit price")
     ts = next_ns()
     side = 1 if o.side == "buy" else -1
-    _a_submitter.new_order(side, o.amount, o.price, o.symbol, timestamp_ns=ts)
+    price = int(o.price) if order_type == "limit" else 0
+    if order_type == "market":
+        _a_submitter.market_order(side, o.amount, o.symbol, timestamp_ns=ts)
+    else:
+        _a_submitter.new_order(side, o.amount, price, o.symbol, timestamp_ns=ts)
     oid = order_id(AKEY.sidepit_id, ts)
-    od = _order_dict(oid, o.symbol, side, o.amount, o.price, ts)
+    od = _order_dict(oid, o.symbol, side, o.amount, price, ts)
     _track_order(oid, od)
     return od
 
