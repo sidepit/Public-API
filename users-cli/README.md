@@ -57,6 +57,10 @@ cancel all · go flat    cancel everything / close everything
 risk · book · help      your envelope · the live book · the grammar
 ```
 
+The top-bar **BTC / SATS** selector changes money amounts everywhere in the
+cockpit, including the unlock input. Switching it converts an amount exactly;
+the exchange still receives integer sats on the wire.
+
 Things to know about the venue (the UI repeats them where it matters):
 
 - **Nothing resolves on button press.** Orders resolve in the next DLOB
@@ -83,9 +87,10 @@ Hand trading to a bot or AI agent **without giving it your money**:
 
 ## Withdraw & leave (the `withdraw` tab)
 
-- **UNLOCK** — one tap requests **everything withdrawable** back. The exchange
-  sends BTC to your own address (there is no destination to mistype, by
-  design). One open unlock at a time.
+- **UNLOCK** — enter an amount in the selected BTC/SATS denomination, or click
+  **MAX** to put `MAX` in the field and request **everything withdrawable**.
+  The exchange sends BTC to your own address (there is no destination to
+  mistype, by design). One open unlock at a time.
 - **EXIT** — sweeps your entire on-chain balance to any address you choose.
 
 ## Handy

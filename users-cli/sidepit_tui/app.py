@@ -21,6 +21,7 @@ from __future__ import annotations
 import os
 import time
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from textual import events
 from textual.app import App, ComposeResult
@@ -73,10 +74,6 @@ def ui_update(fn):
         except NoMatches:
             pass
     return inner
-
-
-def sats(v: int) -> str:
-    return f"{v:,}"
 
 
 def btc(v_sats: int, signed: bool = False) -> str:
@@ -212,9 +209,11 @@ class SidepitApp(App):
     #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
                  padding: 0 1; content-align-vertical: middle; }}
     #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
-    #wallet-pick SelectCurrent {{ height: 1; border: none;
-                                  background: {PANEL}; color: {GOLD}; }}
-    #wallet-pick SelectOverlay {{ border: tall {GOLD}; }}
+    #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
+    #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
+                                                            background: {PANEL};
+                                                            color: {GOLD}; }}
+    #wallet-pick SelectOverlay, #denom-pick SelectOverlay {{ border: tall {GOLD}; }}
     #statbar  {{ height: 1; background: {PANEL}; color: {DIM}; padding: 0 1; }}
     TabbedContent {{ height: 1fr; }}
     Tabs {{ background: {BG}; }}
@@ -294,6 +293,7 @@ class SidepitApp(App):
         self.host = host
         self.bridge: Bridge | None = None
         self.snap = Snap()
+        self.denom = "BTC"
 
     def _q(self, selector, _type=None):
         """Query the BASE screen — widget updates must keep landing while a
@@ -302,12 +302,48 @@ class SidepitApp(App):
         base = self.screen_stack[0]
         return base.query_one(selector) if _type is None else base.query_one(selector, _type)
 
+    def money(self, v_sats: int, signed: bool = False) -> str:
+        """Format a satoshi amount in the user's global display denomination."""
+        if self.denom == "SATS":
+            sign = "+" if signed and v_sats >= 0 else ""
+            return f"{sign}{v_sats:,} sats"
+        return btc(v_sats, signed=signed)
+
+    @staticmethod
+    def _parse_money_input(raw: str, denom: str) -> int | None:
+        """Unlock text → sats. Blank and MAX both mean the full amount."""
+        value = raw.strip().replace(",", "")
+        if not value or value.upper() == "MAX":
+            return None
+        if denom == "SATS":
+            if not value.isdigit() or int(value) <= 0:
+                raise ValueError("enter a positive whole number of sats")
+            return int(value)
+        try:
+            amount = Decimal(value)
+        except InvalidOperation as exc:
+            raise ValueError("enter a positive BTC amount") from exc
+        if not amount.is_finite():
+            raise ValueError("enter a positive BTC amount")
+        sats_exact = amount * Decimal(100_000_000)
+        if amount <= 0 or sats_exact != sats_exact.to_integral_value():
+            raise ValueError("BTC supports at most 8 decimal places")
+        return int(sats_exact)
+
+    @staticmethod
+    def _money_input(v_sats: int, denom: str) -> str:
+        if denom == "SATS":
+            return f"{v_sats:,}"
+        return format(Decimal(v_sats) / Decimal(100_000_000), "f")
+
     # --- composition --------------------------------------------------------
     def compose(self) -> ComposeResult:
         with Horizontal(id="topbar"):
             yield Static("sidepit // cockpit · connecting…", id="titlebar")
             # Always-visible wallet switcher — ctrl+a still opens the full
             # table, but nobody has to know the shortcut exists.
+            yield Select([("₿ BTC", "BTC"), ("sat SATS", "SATS")], value="BTC",
+                         id="denom-pick", allow_blank=False)
             yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
@@ -360,7 +396,8 @@ class SidepitApp(App):
                                          f"[{DIM}]leave it empty for everything[/]",
                                          classes="fieldlabel")
                             with Horizontal(classes="amtrow"):
-                                yield Input(placeholder="sats", id="unlock-amt")
+                                yield Input(placeholder="BTC (e.g. 0.005)",
+                                            id="unlock-amt")
                                 yield Button("MAX", id="unlock-max",
                                              classes="chip")
                             yield Button("UNLOCK — request funds back",
@@ -496,9 +533,9 @@ class SidepitApp(App):
             color = GREEN if upnl >= 0 else RED
             lines.append(
                 f"[{BRIGHT}]{p['ticker']}[/] {side} {abs(qty)} "
-                f"[{DIM}]·[/] [{BRIGHT}]{btc(notional)}[/]\n"
+                f"[{DIM}]·[/] [{BRIGHT}]{self.money(notional)}[/]\n"
                 f"  entry {p['entry_price']} · mark {s.last or '—'} · "
-                f"pnl [{color}]{btc(upnl, signed=True)}[/]\n"
+                f"pnl [{color}]{self.money(upnl, signed=True)}[/]\n"
                 f"  [{DIM}]entry resets daily at settlement · "
                 f"{p['open_bids']}b/{p['open_asks']}a working[/]")
         self._q("#positions", Static).update(
@@ -513,18 +550,18 @@ class SidepitApp(App):
         state = (f"[{RED}]RESTRICTED — reduce only[/]" if s.is_restricted
                  else f"[{GREEN}]SAFE[/]")
         self._q("#envelope", Static).update(
-            f"{title('risk envelope')}\n"
-            f"equity    [{BRIGHT}]{btc(equity)}[/] [{DIM}]${eq_usd:,.0f}[/]\n"
-            f"margin    [{BRIGHT}]{btc(used)}[/]\n"
-            f"free      [{BRIGHT}]{btc(s.available_margin)}[/]\n"
-            f"unlocking [{BRIGHT}]{btc(s.pending_unlock)}[/]\n"
+            f"{title('risk')}\n"
+            f"equity    [{BRIGHT}]{self.money(equity)}[/] [{DIM}]${eq_usd:,.0f}[/]\n"
+            f"margin    [{BRIGHT}]{self.money(used)}[/]\n"
+            f"free      [{BRIGHT}]{self.money(s.available_margin)}[/]\n"
+            f"unlocking [{BRIGHT}]{self.money(s.pending_unlock)}[/]\n"
             + (f"realized  [{GREEN if s.realized_pnl >= 0 else RED}]"
-               f"{btc(s.realized_pnl, signed=True)}[/]\n"
+               f"{self.money(s.realized_pnl, signed=True)}[/]\n"
                f"open      [{GREEN if unreal_total >= 0 else RED}]"
-               f"{btc(unreal_total, signed=True)}[/]\n" if s.is_open else
-               f"[{DIM}]settled — pnl folded into balance[/]\n")
+               f"{self.money(unreal_total, signed=True)}[/]\n" if s.is_open else
+               f"[{DIM}]settled: marked-to-market[/]\n")
             + f"[{GREEN_DIM}]{'█' * fill}{'░' * (barw - fill)}[/] {state}\n"
-            + f"[{DIM}]btc-denominated · no USD shock liq.[/]")
+            + f"[{DIM}]btc-denominated[/]")
         # session / delegation (honest, per the handoff)
         active = [d for d in s.delegates if d["is_active"]]
         pend = [d for d in s.delegates if d["pending"]]
@@ -565,8 +602,8 @@ class SidepitApp(App):
         # fund tab
         self._q("#deposit", Static).update(
             f"[{BRIGHT}]{s.address}[/]\n"
-            f"on-chain [{BRIGHT}]{sats(s.chain_confirmed)}[/] sats confirmed · "
-            f"{sats(s.chain_mempool)} incoming\n"
+            f"on-chain [{BRIGHT}]{self.money(s.chain_confirmed)}[/] confirmed · "
+            f"{self.money(s.chain_mempool)} incoming\n"
             f"[{DIM}](updated "
             f"{datetime.fromtimestamp(s.chain_at).strftime('%H:%M:%S') if s.chain_at else 'never'})[/]")
         qrw = self._q("#qr", Static)
@@ -575,15 +612,16 @@ class SidepitApp(App):
             qrw._qr_done = True
         self._update_fund_buttons(s)
         ulines = [
-            f"equity {btc(equity)} (${eq_usd:,.2f}) · withdrawable now "
-            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}",
+            f"equity {self.money(equity)} (${eq_usd:,.2f}) · withdrawable now "
+            f"{self.money(s.available_margin)} · pending unlock "
+            f"{self.money(s.pending_unlock)}",
             f"[{DIM}]unlock lifecycle: RESERVED (margin debited) → PROCESSING "
             f"(BTC broadcast) → COMPLETED — or REJECTED · one open unlock per "
             f"account[/]"]
         for u in s.unlock_records[-5:]:
             st = u["status_name"].removeprefix("UNLOCK_")
             c = (GREEN if st == "COMPLETED" else RED if st == "REJECTED" else GOLD)
-            row = (f"[{c}]{st}[/] {btc(u['amount_sats'])}"
+            row = (f"[{c}]{st}[/] {self.money(u['amount_sats'])}"
                    f" [{DIM}]{u['oid'][-14:]}[/]")
             if u["btc_txid"]:
                 # Textual markup needs the value QUOTED — a bare URL (with its
@@ -616,7 +654,7 @@ class SidepitApp(App):
         # LOCK: lights up the moment funds are SEEN (mempool included)
         if local > 0:
             lock.variant = "success"
-            lock.label = f"LOCK — fund the account ({sats(local)} sats)"
+            lock.label = f"LOCK — fund the account ({self.money(local)})"
             self._q("#lock-status", Static).update(
                 f"[{GREEN}]funds detected[/] — one tap forwards your ENTIRE "
                 f"balance (unconfirmed included) to the exchange; the network "
@@ -631,22 +669,29 @@ class SidepitApp(App):
         # field decides MAX vs an explicit request — the label follows it so
         # the button always states what the tap will actually do.
         if equity > 0:
-            raw = self._q("#unlock-amt", Input).value.strip().replace(",", "")
-            want = int(raw) if raw.isdigit() and int(raw) > 0 else None
+            raw = self._q("#unlock-amt", Input).value
+            invalid = None
+            try:
+                want = self._parse_money_input(raw, self.denom)
+            except ValueError as exc:
+                want, invalid = None, str(exc)
             unlock.variant = "success"
-            unlock.label = (f"UNLOCK — request {btc(want)} back" if want
-                            else f"UNLOCK — request funds back ({btc(equity)})")
-            if want and want > s.available_margin:
+            unlock.label = (f"UNLOCK — request {self.money(want)} back" if want
+                            else f"UNLOCK — request funds back ({self.money(equity)})")
+            if invalid:
                 self._q("#unlock-status", Static).update(
-                    f"[{GOLD}]{sats(want)} sats is more than the "
-                    f"{sats(s.available_margin)} withdrawable now[/] — send it "
+                    f"[{RED}]{invalid}[/] — or click MAX")
+            elif want and want > s.available_margin:
+                self._q("#unlock-status", Static).update(
+                    f"[{GOLD}]{self.money(want)} is more than the "
+                    f"{self.money(s.available_margin)} withdrawable now[/] — send it "
                     f"and the exchange decides; a rejected unlock shows in the "
                     f"records below")
             else:
                 self._q("#unlock-status", Static).update(
                     f"[{GREEN}]you have funds on sidepit[/] — "
-                    + (f"requesting {sats(want)} sats" if want else
-                       "blank amount requests EVERYTHING withdrawable")
+                    + (f"requesting {self.money(want)}" if want else
+                       "MAX requests EVERYTHING withdrawable")
                     + " back to your address (applies live in-session)")
         else:
             unlock.variant = "default"
@@ -659,7 +704,7 @@ class SidepitApp(App):
             exit_.variant = "warning"
             self._q("#exit-status", Static).update(
                 f"[{GOLD}]sweeps your ENTIRE on-chain balance "
-                f"({sats(local)} sats) to the address above — leaving sidepit[/]")
+                f"({self.money(local)}) to the address above — leaving sidepit[/]")
         else:
             exit_.variant = "default"
             self._q("#exit-status", Static).update(
@@ -693,7 +738,7 @@ class SidepitApp(App):
         self._q("#statbar", Static).update(
             f"{dot} auction sync · envelope: "
             f"[{RED if s.is_restricted else GREEN}]{env}[/] · book: transparent · "
-            f"denom: BTC · session {s.session_id or '—'}")
+            f"denom: [{GOLD}]{self.denom}[/] · session {s.session_id or '—'}")
 
     @ui_update
     def _refresh_book(self) -> None:
@@ -788,6 +833,29 @@ class SidepitApp(App):
 
     @ui_update
     def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "denom-pick":
+            new_denom = str(event.value)
+            if new_denom not in ("BTC", "SATS") or new_denom == self.denom:
+                return
+            field = self._q("#unlock-amt", Input)
+            raw = field.value
+            try:
+                amount = self._parse_money_input(raw, self.denom)
+            except ValueError:
+                amount = None
+            self.denom = new_denom
+            field.placeholder = ("BTC (e.g. 0.005)" if new_denom == "BTC"
+                                 else "sats (e.g. 500,000)")
+            if raw.strip().upper() == "MAX":
+                field.value = "MAX"
+            elif amount is not None:
+                field.value = self._money_input(amount, new_denom)
+            if self.bridge is not None and self.snap is self.bridge.snap:
+                self.apply_snap(self.snap)
+            else:
+                self._refresh_bars()
+                self._update_fund_buttons(self.snap)
+            return
         if event.select.id != "wallet-pick":
             return
         from sidepit_trader import keystore
@@ -847,12 +915,13 @@ class SidepitApp(App):
             used = sum(p["margin_required"] for p in s.positions)
             equity, unreal = equity_sats(s)
             eq_usd = equity / s.last if s.last else 0.0
-            pnl = (f"realized {btc(s.realized_pnl, signed=True)} · open "
-                   f"{btc(unreal, signed=True)}" if s.is_open
-                   else "settled (pnl folded into available balance)")
+            pnl = (f"realized {self.money(s.realized_pnl, signed=True)} · open "
+                   f"{self.money(unreal, signed=True)}" if s.is_open
+                   else "settled: marked-to-market")
             self.add_event("sys",
-                           f"equity {btc(equity)} (${eq_usd:,.2f}) · margin used "
-                           f"{btc(used)} · withdrawable {btc(s.available_margin)} · "
+                           f"equity {self.money(equity)} (${eq_usd:,.2f}) · margin used "
+                           f"{self.money(used)} · withdrawable "
+                           f"{self.money(s.available_margin)} · "
                            f"{pnl} · "
                            f"{'RESTRICTED' if s.is_restricted else 'SAFE'}")
             return
@@ -921,12 +990,12 @@ class SidepitApp(App):
                 return
             self.push_screen(
                 Confirm(f"Fund the account?\nYour ENTIRE on-chain balance "
-                        f"({sats(total)} sats) is forwarded to the exchange — "
+                        f"({self.money(total)}) is forwarded to the exchange — "
                         f"the network fee comes out of it. This broadcasts a "
                         f"REAL Bitcoin transaction.", yes="FUND"),
                 lambda ok: ok and b.cmd("lock_all"))
         elif bid == "unlock-max":
-            self._q("#unlock-amt", Input).value = ""   # empty IS max
+            self._q("#unlock-amt", Input).value = "MAX"
             self._update_fund_buttons(self.snap)       # label follows instantly
             return
         elif bid == "unlock-all":
@@ -935,15 +1004,13 @@ class SidepitApp(App):
                 self.add_event("warn", "no exchange balance to withdraw — LOCK "
                                        "funds first, then trade")
                 return
-            raw = self._q("#unlock-amt", Input).value.strip().replace(",", "")
-            amount = None                      # blank / MAX → everything withdrawable
-            if raw and raw.upper() != "MAX":
-                if not raw.isdigit() or int(raw) <= 0:
-                    self.add_event("err", "unlock: enter a whole number of sats, "
-                                          "or leave it blank for MAX")
-                    return
-                amount = int(raw)
-            what = (f"{sats(amount)} sats ({btc(amount)})" if amount
+            raw = self._q("#unlock-amt", Input).value
+            try:
+                amount = self._parse_money_input(raw, self.denom)
+            except ValueError as exc:
+                self.add_event("err", f"unlock: {exc}, or click MAX")
+                return
+            what = (self.money(amount) if amount
                     else "EVERYTHING withdrawable")
             self.push_screen(
                 Confirm(f"Request {what} back to your own address?\n"
@@ -962,7 +1029,7 @@ class SidepitApp(App):
                 return
             self.push_screen(
                 Confirm(f"EXIT sidepit?\nYour ENTIRE on-chain balance "
-                        f"({sats(total)} sats, minus the network fee) is swept "
+                        f"({self.money(total)}, minus the network fee) is swept "
                         f"to:\n{dest}\nThis broadcasts a REAL Bitcoin "
                         f"transaction.", yes="EXIT"),
                 lambda ok: ok and b.cmd("exit_all", dest))
