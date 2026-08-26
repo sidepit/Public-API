@@ -15,6 +15,9 @@ import sys
 def _cli(argv: list[str]) -> int:
     from sidepit_trader import keystore, wallet
     cmd = argv[0]
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
     if cmd == "import":
         import getpass
         from sidepit_trader import mnemonic

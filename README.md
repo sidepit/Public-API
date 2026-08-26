@@ -20,7 +20,7 @@ it cannot withdraw Bitcoin or authorize another agent.
 <p align="center">
   <img src="images/cockpit.png" alt="sidepit // cockpit — the TUI: transparent book, risk envelope, plain-english prompt" width="860">
 </p>
-<p align="center"><i>The cockpit: transparent DLOB book, your risk envelope, and a prompt that takes plain english.</i></p>
+<p align="center"><i>The cockpit: transparent DLOB book, your risk envelope, and a prompt that takes plain english.<br>Note the log — <b>the delegate key trades; fund, withdraw and delegate changes need the owner's key.</b></i></p>
 
 <p align="center">
   <img src="images/doggie-wallet.png" alt="doggie // wallet — one number, two buttons" width="720">

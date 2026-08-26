@@ -50,7 +50,7 @@ def load_or_onboard(app) -> None:
     or run onboarding."""
     row = keystore.active_identity()
     if row is not None:
-        app.start_bridge(row["sidepit_id"], row["wif"])
+        app.start_bridge(row["sidepit_id"], row["wif"], name=row["name"])
     else:
         app.push_screen(OnboardScreen())
 
@@ -85,7 +85,7 @@ class OnboardScreen(ModalScreen[None]):
                 mnemonic: str | None = None) -> None:
         keystore.save_identity(name, sidepit_id, wif, active=True,
                                mnemonic=mnemonic)
-        self.app.start_bridge(sidepit_id, wif)
+        self.app.start_bridge(sidepit_id, wif, name=name)
         self.dismiss(None)
 
     def _msg(self, text: str) -> None:
