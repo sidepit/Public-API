@@ -18,6 +18,7 @@ green · [warn] gold · [err] red.
 """
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
 
@@ -27,8 +28,8 @@ from textual.containers import Container, Grid, Horizontal, Vertical
 from textual.coordinate import Coordinate
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Input, Label, RichLog, Static,
-                             TabbedContent, TabPane)
+from textual.widgets import (Button, DataTable, Input, Label, RichLog, Select,
+                             Static, TabbedContent, TabPane)
 
 from .bridge import Bridge, Snap
 from .intents import HELP, Intent, parse
@@ -52,7 +53,7 @@ CYAN = "#5ab4c4"
 TRY_PROMPTS = [
     "show me the book before i send",
     "what's my risk in btc terms",
-    "buy 0.001 btc at market",
+    "buy 1 at market",
     "cancel all working orders",
     "go flat and exit",
 ]
@@ -202,7 +203,13 @@ class SidepitApp(App):
                 ("ctrl+d", "doggie", "doggie view")]
     CSS = f"""
     Screen {{ background: {BG}; color: {TEXT}; }}
-    #titlebar {{ height: 1; background: {PANEL}; color: {DIM}; padding: 0 1; }}
+    #topbar {{ height: 1; background: {PANEL}; }}
+    #titlebar {{ height: 1; width: 1fr; background: {PANEL}; color: {DIM};
+                 padding: 0 1; }}
+    #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
+    #wallet-pick SelectCurrent {{ height: 1; border: none;
+                                  background: {PANEL}; color: {GOLD}; }}
+    #wallet-pick SelectOverlay {{ border: tall {GOLD}; }}
     #statbar  {{ height: 1; background: {PANEL}; color: {DIM}; padding: 0 1; }}
     TabbedContent {{ height: 1fr; }}
     Tabs {{ background: {BG}; }}
@@ -240,6 +247,13 @@ class SidepitApp(App):
     .formrow {{ height: 3; }}
     .bigbtn {{ width: 1fr; height: 3; text-style: bold; margin: 0 0 0 0; }}
     .formrow Input {{ width: 26; }}
+    /* the amount row is a STEP, not a footnote: label above, full-width
+       field with a gold edge so the eye lands on it before the button */
+    .fieldlabel {{ height: 1; margin-top: 1; }}
+    .amtrow {{ height: 3; }}
+    .amtrow Input {{ width: 1fr; border: tall {GOLD}; background: {BG}; }}
+    .amtrow Input:focus {{ border: tall {BRIGHT}; }}
+    .chip {{ width: 9; height: 3; margin-left: 1; }}
     #confirm-grid, #secret-grid {{
         grid-size: 2; grid-gutter: 1 2; grid-rows: auto auto;
         padding: 1 2; width: 72; height: auto;
@@ -265,7 +279,11 @@ class SidepitApp(App):
 
     # --- composition --------------------------------------------------------
     def compose(self) -> ComposeResult:
-        yield Static("sidepit // cockpit · connecting…", id="titlebar")
+        with Horizontal(id="topbar"):
+            yield Static("sidepit // cockpit · connecting…", id="titlebar")
+            # Always-visible wallet switcher — ctrl+a still opens the full
+            # table, but nobody has to know the shortcut exists.
+            yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
                 with Horizontal():
@@ -313,6 +331,13 @@ class SidepitApp(App):
                     with Vertical():
                         with Container(classes="panel"):
                             yield Static(title("1 · unlock"), classes="paneltitle")
+                            yield Static(f"[{BRIGHT}]how much?[/]  "
+                                         f"[{DIM}]leave it empty for everything[/]",
+                                         classes="fieldlabel")
+                            with Horizontal(classes="amtrow"):
+                                yield Input(placeholder="sats", id="unlock-amt")
+                                yield Button("MAX", id="unlock-max",
+                                             classes="chip")
                             yield Button("UNLOCK — request funds back",
                                          id="unlock-all", classes="bigbtn")
                             yield Static("", id="unlock-status", classes="hint")
@@ -344,7 +369,13 @@ class SidepitApp(App):
                         yield Static("", id="del-derived")
         yield Static("", id="statbar")
 
+    open_doggie_on_start = False       # set by `sidepit doggie`
+
     def on_mount(self) -> None:
+        self.refresh_wallets()
+        if self.open_doggie_on_start:
+            # after onboarding/bridge start, so the view opens with live state
+            self.call_after_refresh(self.action_doggie)
         w = self._q("#working", WorkingOrders)
         w.add_columns("side", "qty", "px", "id")
         w.cursor_type = "row"
@@ -357,7 +388,14 @@ class SidepitApp(App):
         load_or_onboard(self)
 
     # --- bridge lifecycle (called by onboard / account switcher) -------------
-    def start_bridge(self, address: str, wif: str | None) -> None:
+    wallet_name: str | None = None      # which WALLET this session runs on
+
+    def start_bridge(self, address: str, wif: str | None,
+                     name: str | None = None) -> None:
+        # The session's identity is the WALLET, not the account address: an
+        # agent key and that account's own key share an address but are
+        # different sessions (AGENT vs SIGNING). Track the name.
+        self.wallet_name = name
         if self.bridge is not None:      # switching: retire the old thread
             self.bridge.stop()
             self.bridge = None
@@ -372,10 +410,19 @@ class SidepitApp(App):
         self.bridge.start()
         mode = "watch-only" if wif is None else "custody key loaded"
         self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        self.refresh_wallets()     # keep the dropdown honest after any switch
         self.add_event("sys", HELP)
+        # A delegate may TRADE and cancel — never move money or change who is
+        # authorized (the courier rule; the engine enforces it too). Offering
+        # those buttons to a delegate only produces confusing rejections.
+        deleg = self.bridge is not None and self.bridge.snap.is_delegate
         for bid in ("lock-all", "unlock-all", "exit-all", "mint", "revoke",
                     "register"):
-            self._q(f"#{bid}", Button).disabled = wif is None
+            self._q(f"#{bid}", Button).disabled = wif is None or deleg
+        if deleg:
+            self.add_event("sys", "delegate key: trading enabled · fund, "
+                                  "withdraw and delegate changes need the "
+                                  "account owner's key")
 
     def right_click_cancel(self, oid: str) -> None:
         if self.bridge is None or self.snap.watch_only:
@@ -401,6 +448,12 @@ class SidepitApp(App):
     # --- snapshot → widgets ---------------------------------------------------
     @ui_update
     def apply_snap(self, s: Snap) -> None:
+        # A retiring bridge can post one last snapshot AFTER a wallet switch;
+        # applying it repaints the old account over the new session (the
+        # picker appears to do nothing). Each Bridge owns its own Snap, so
+        # identity tells us whether this one is still ours.
+        if self.bridge is None or s is not self.bridge.snap:
+            return
         self.snap = s
         self._refresh_bars()
         self._refresh_book()
@@ -450,9 +503,23 @@ class SidepitApp(App):
         # session / delegation (honest, per the handoff)
         active = [d for d in s.delegates if d["is_active"]]
         pend = [d for d in s.delegates if d["pending"]]
-        dlines = [f"custody  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
-                  else "custody  —",
-                  f"mode     [{GOLD}]{'WATCH-ONLY' if s.watch_only else 'SIGNING'}[/]"]
+        # Three honest modes: WATCH (no key) · SIGNING (the account's own key,
+        # can move money) · AGENT (a delegate key — trades this account, can
+        # never withdraw or appoint). AGENT also states whether the ENGINE has
+        # verified it, because an unverified agent's orders bounce RC_ID.
+        if s.watch_only:
+            mode = f"[{DIM}]WATCH[/]"
+        elif s.is_delegate:
+            mode = (f"[{GREEN}]AGENT[/] · verified" if s.delegate_active
+                    else f"[{RED}]AGENT[/] · not authorized yet")
+        else:
+            mode = f"[{GOLD}]SIGNING[/]"
+        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
+                  else "account  —",
+                  f"mode     {mode}"]
+        if s.is_delegate:
+            dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
+                          f"account key[/]")
         for d in active:
             dlines.append(f"[{GREEN}]● delegate[/] {d['trader_id'][:14]}… active")
         for d in pend:
@@ -535,14 +602,27 @@ class SidepitApp(App):
             self._q("#lock-status", Static).update(
                 f"[{DIM}]nothing on-chain yet — FUND first[/]")
 
-        # UNLOCK: lights up when there's equity on the exchange
+        # UNLOCK: lights up when there's equity on the exchange. The amount
+        # field decides MAX vs an explicit request — the label follows it so
+        # the button always states what the tap will actually do.
         if equity > 0:
+            raw = self._q("#unlock-amt", Input).value.strip().replace(",", "")
+            want = int(raw) if raw.isdigit() and int(raw) > 0 else None
             unlock.variant = "success"
-            unlock.label = f"UNLOCK — request funds back ({btc(equity)})"
-            self._q("#unlock-status", Static).update(
-                f"[{GREEN}]you have funds on sidepit[/] — one tap requests "
-                f"EVERYTHING withdrawable back to your address (applies live "
-                f"in-session)")
+            unlock.label = (f"UNLOCK — request {btc(want)} back" if want
+                            else f"UNLOCK — request funds back ({btc(equity)})")
+            if want and want > s.available_margin:
+                self._q("#unlock-status", Static).update(
+                    f"[{GOLD}]{sats(want)} sats is more than the "
+                    f"{sats(s.available_margin)} withdrawable now[/] — send it "
+                    f"and the exchange decides; a rejected unlock shows in the "
+                    f"records below")
+            else:
+                self._q("#unlock-status", Static).update(
+                    f"[{GREEN}]you have funds on sidepit[/] — "
+                    + (f"requesting {sats(want)} sats" if want else
+                       "blank amount requests EVERYTHING withdrawable")
+                    + " back to your address (applies live in-session)")
         else:
             unlock.variant = "default"
             unlock.label = "UNLOCK — request funds back"
@@ -565,7 +645,9 @@ class SidepitApp(App):
     def _refresh_bars(self) -> None:
         s = self.snap
         dot = f"[{GREEN}]●[/]" if s.is_open else f"[{DIM}]●[/]"
-        mode = "WATCH-ONLY" if s.watch_only else "signing"
+        mode = ("watch" if s.watch_only else
+                ("agent" if s.delegate_active else "agent · unverified")
+                if s.is_delegate else "signing")
         self._q("#titlebar", Static).update(
             f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
             f"{dot} [{BRIGHT}]{s.state}[/] {s.ticker}   "
@@ -643,6 +725,67 @@ class SidepitApp(App):
             self.notify(text, severity=sev, timeout=7)
 
     # --- the prompt loop ---------------------------------------------------------
+    def refresh_wallets(self) -> None:
+        """(Re)fill the wallet dropdown from the keystore and show the active
+        one. Called at mount and after every switch/import/mint."""
+        from sidepit_trader import keystore
+        try:
+            ids = keystore.identities()
+        except Exception:
+            return
+        sel = self._q("#wallet-pick", Select)
+        opts = [(f"{i['name']}  {i['sidepit_id'][-6:]}"
+                 f"{'' if i['has_key'] else ' (watch)'}", i["name"])
+                for i in ids]
+        sel.set_options(opts)
+        # Show the wallet the SESSION is on — by NAME first (two wallets can
+        # share an account: its own key and an agent key), then by address,
+        # then the ACTIVE file. A dropdown already showing a name can't be
+        # re-picked, so getting this wrong strands the human.
+        names = {i["name"] for i in ids}
+        cur = self.wallet_name if self.wallet_name in names else None
+        cur = cur or next((i["name"] for i in ids
+                           if i["sidepit_id"] == self.snap.address), None)
+        cur = cur or next((i["name"] for i in ids if i["active"]), None)
+        if cur:
+            with self.prevent(Select.Changed):     # don't re-switch on refill
+                sel.value = cur
+
+    @ui_update
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id != "wallet-pick":
+            return
+        from sidepit_trader import keystore
+        name = str(event.value)
+        # The "nothing selected" sentinel differs across Textual versions
+        # (BLANK / NULL) — trust the keystore instead of the sentinel name.
+        if name not in {i["name"] for i in keystore.identities()}:
+            return
+        keystore.set_active(name)
+        # by-name, NOT active_identity(): env vars outrank the keystore there,
+        # so an exported SIDEPIT_WIF would silently keep the old session.
+        row = keystore.identity(name)
+        if not row:
+            self.add_event("err", f"wallet '{name}' could not be loaded")
+            return
+        # Compare WALLET NAMES, not addresses: an agent key and its account's
+        # own key report the same account, so an address check made
+        # agent -> custody -> agent a silent no-op.
+        if name == self.wallet_name:
+            return
+        if os.environ.get("SIDEPIT_WIF") or os.environ.get("SIDEPIT_ID"):
+            self.add_event("warn", "SIDEPIT_WIF/ID are set in your shell — the "
+                                   "picker now wins for this session; unset "
+                                   "them to avoid confusion")
+        self.add_event("sys", f"switched to '{name}'")
+        self.start_bridge(row["sidepit_id"], row["wif"], name=name)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """The unlock button must always state what the tap will do, so the
+        amount field re-labels it on every keystroke."""
+        if event.input.id == "unlock-amt":
+            self._update_fund_buttons(self.snap)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "prompt":
             return
@@ -747,17 +890,31 @@ class SidepitApp(App):
                         f"the network fee comes out of it. This broadcasts a "
                         f"REAL Bitcoin transaction.", yes="FUND"),
                 lambda ok: ok and b.cmd("lock_all"))
+        elif bid == "unlock-max":
+            self._q("#unlock-amt", Input).value = ""   # empty IS max
+            self._update_fund_buttons(self.snap)       # label follows instantly
+            return
         elif bid == "unlock-all":
             equity, _ = equity_sats(self.snap)
             if equity <= 0:
                 self.add_event("warn", "no exchange balance to withdraw — LOCK "
                                        "funds first, then trade")
                 return
+            raw = self._q("#unlock-amt", Input).value.strip().replace(",", "")
+            amount = None                      # blank / MAX → everything withdrawable
+            if raw and raw.upper() != "MAX":
+                if not raw.isdigit() or int(raw) <= 0:
+                    self.add_event("err", "unlock: enter a whole number of sats, "
+                                          "or leave it blank for MAX")
+                    return
+                amount = int(raw)
+            what = (f"{sats(amount)} sats ({btc(amount)})" if amount
+                    else "EVERYTHING withdrawable")
             self.push_screen(
-                Confirm(f"Request EVERYTHING withdrawable back to your own "
-                        f"address?\nApplies live in-session; the "
+                Confirm(f"Request {what} back to your own address?\n"
+                        f"Applies live in-session; the "
                         f"exchange sends the BTC — you sign nothing more."),
-                lambda ok: ok and b.cmd("unlock", None))
+                lambda ok: ok and b.cmd("unlock", amount))
         elif bid == "exit-all":
             dest = self._q("#exit-dest", Input).value.strip()
             if not dest.startswith("bc1"):
@@ -829,7 +986,7 @@ class SidepitApp(App):
                               f"(env file written; secret not logged)")
 
 
-def main() -> None:
+def main(start_doggie: bool = False) -> None:
     import contextlib
     import logging
     import os
@@ -842,4 +999,6 @@ def main() -> None:
     logging.basicConfig(filename=logpath, level=logging.INFO, force=True,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
     with open(logpath, "a") as errlog, contextlib.redirect_stderr(errlog):
-        SidepitApp(host=os.environ.get("SIDEPIT_HOST", HOST_DEFAULT)).run()
+        app = SidepitApp(host=os.environ.get("SIDEPIT_HOST", HOST_DEFAULT))
+        app.open_doggie_on_start = start_doggie
+        app.run()

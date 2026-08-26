@@ -11,9 +11,17 @@ You can do everything here: **create your account → fund it → trade → with
 
 ```sh
 git clone https://github.com/sidepit/Public-API && cd Public-API
-python3 -m venv python-client/.venv
-python-client/.venv/bin/pip install -r python-client/requirements.txt -r users-cli/requirements.txt
-cd users-cli && ../python-client/.venv/bin/python -m sidepit_tui
+./install_sidepit          # once — builds the environment, installs `sidepit`
+sidepit                    # the cockpit
+```
+
+Then, any time:
+
+```sh
+sidepit                  # cockpit: book, positions, plain-english prompt
+sidepit doggie           # wallet view: your wealth as one number, two buttons
+sidepit list             # your wallets     sidepit use <name>   switch wallet
+sidepit import           # add a key (12 words or WIF, hidden input)
 ```
 
 ## First run — your identity
@@ -87,7 +95,6 @@ python -m sidepit_tui import [name]   # paste 12 words or a WIF (hidden input)
 python -m sidepit_tui watch <bc1q…>   # read-only identity
 python -m sidepit_tui list            # your identities (never prints secrets)
 python -m sidepit_tui use <name>      # switch; in-app: ctrl+a
-SIDEPIT_HOST=… python -m sidepit_tui  # point at another venue host
 ```
 
 If right-click is pasting instead of canceling, your terminal is eating the

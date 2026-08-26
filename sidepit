@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+# sidepit — one command for the whole client.
+#
+#   sidepit               open the cockpit (the terminal app)
+#   sidepit doggie        open the wallet view
+#   sidepit import        add an existing key (12 words or WIF)
+#   sidepit list          list your wallets
+#   sidepit use <name>    switch the active wallet
+#
+# Resolves its own location, so it works from any directory and through a
+# symlink on your PATH.
+set -euo pipefail
+
+src="${BASH_SOURCE[0]}"
+while [ -L "$src" ]; do                      # follow symlinks to the real file
+  dir="$(cd -P "$(dirname "$src")" && pwd)"
+  src="$(readlink "$src")"
+  [[ $src != /* ]] && src="$dir/$src"
+done
+ROOT="$(cd -P "$(dirname "$src")" && pwd)"
+PY="$ROOT/python-client/.venv/bin/python"
+
+if [ ! -x "$PY" ]; then
+  echo "sidepit: not installed yet — run:  $ROOT/install_sidepit" >&2
+  exit 1
+fi
+
+if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
+  sed -n '3,8p' "$src" | sed 's/^# \?//'
+  exit 0
+fi
+
+cd "$ROOT/users-cli"
+exec "$PY" -m sidepit_tui "$@"

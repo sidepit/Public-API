@@ -64,8 +64,10 @@ class Snap:
     depth_bids: list = field(default_factory=list)   # [(price, size)] best-first
     depth_asks: list = field(default_factory=list)
     # identity
-    address: str = ""
+    address: str = ""          # the ACCOUNT being traded
     watch_only: bool = True
+    is_delegate: bool = False      # the loaded key trades this account, isn't it
+    delegate_active: bool = False  # …and the ENGINE agrees (verified on the wire)
     # account (sats; names match AccountMarginState)
     net_locked: int = 0
     available_balance: int = 0     # YESTERDAY'S settled figure — static intraday
@@ -117,11 +119,22 @@ class Bridge(threading.Thread):
 
     # --- identity (called from UI thread BEFORE start(), or via command) ----
     def set_identity(self, address: str, wif: str | None) -> None:
-        """Watch-only when wif is None. Called before start()."""
+        """Watch-only when wif is None. Called before start().
+
+        `address` is the ACCOUNT (whose margin we trade). The key may be the
+        account's own key, or a DELEGATE key trading it — we tell them apart
+        by observing the key, exactly as signer_from_env does: derive its own
+        address and compare. Getting this wrong signs for the wrong account.
+        """
         self.snap.address = address
         self.snap.watch_only = wif is None
+        self._identity = None
+        self.snap.is_delegate = False
+        self.snap.delegate_active = False      # unverified until the wire says so
+        self._deleg_warned = False
         if wif:
             self._identity = wallet.from_wif(wif)
+            self.snap.is_delegate = self._identity.sidepit_id != address
 
     # --- command surface (UI thread enqueues; run loop executes) ------------
     def cmd(self, *parts) -> None:
@@ -149,7 +162,13 @@ class Bridge(threading.Thread):
         if self.snap.watch_only or self._identity is None:
             raise RuntimeError("watch-only: no signing key loaded")
         if self._sub is None:
-            self._sub = Submitter(self._identity.signer(), self.host)
+            if self.snap.is_delegate:
+                # trade the ACCOUNT, signed by this key, agent_id stamped
+                signer = Signer.as_delegate(self._identity.priv_hex,
+                                            self.snap.address)
+            else:
+                signer = self._identity.signer()
+            self._sub = Submitter(signer, self.host)
         return self._sub
 
     def _receipt_pending(self, verb: str, agent_id: str | None = None) -> bool:
@@ -235,6 +254,23 @@ class Bridge(threading.Thread):
         tp = self._rq(lambda r: r.positions(self.snap.address))
         a = tp.accountstate
         s = self.snap
+        # VERIFY delegation against the exchange, never assume it. The key
+        # knowing an account id proves nothing — the engine's active set is
+        # the only authority on whether we may trade it.
+        if s.is_delegate and self._identity is not None:
+            mine = self._identity.sidepit_id
+            was = s.delegate_active
+            s.delegate_active = any(d.agent_id == mine
+                                    for d in a.active_delegates)
+            if s.delegate_active and not was:
+                self.on_event("success", f"delegate VERIFIED ACTIVE on "
+                                         f"{s.address[:14]}… — you may trade")
+            elif not s.delegate_active and (was or not self._deleg_warned):
+                self._deleg_warned = True
+                self.on_event("warning",
+                              f"this key is NOT in {s.address[:14]}…'s active "
+                              f"delegate set — orders will be rejected (RC_ID) "
+                              f"until the account owner authorizes it")
         s.net_locked = int(a.net_locked)
         s.available_balance = int(a.available_balance)
         s.available_margin = int(a.available_margin)
@@ -472,6 +508,11 @@ class Bridge(threading.Thread):
             self.on_event("error", f"{verb}: {e}")
 
     def _need_identity(self) -> wallet.Identity:
+        if self.snap.is_delegate:
+            # On-chain LOCK/EXIT spend the ACCOUNT's coins; a delegate key
+            # holds none of them and can't sign for that address.
+            raise RuntimeError("delegate key: on-chain lock/exit belong to the "
+                               "account owner's key, not this one")
         if self._identity is None:
             raise RuntimeError("watch-only: no signing key loaded")
         return self._identity

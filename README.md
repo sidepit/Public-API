@@ -59,15 +59,33 @@ sending straight to the lock address does not identify the intended account.
 
 ```sh
 git clone --recurse-submodules https://github.com/sidepit/Public-API && cd Public-API
-python3 -m venv python-client/.venv
-python-client/.venv/bin/pip install -r python-client/requirements.txt
+./install_sidepit
 python-client/.venv/bin/python examples/quickstart.py
 ```
+
+`install_sidepit` builds the environment and gives you one command, `sidepit`.
+Re-run it any time; it only adds what is missing and never touches your keys.
 
 Expected: named exchange state, live dated forward and expiry, bid/ask, familiar
 USD/BTC translation, one contract's USD exposure, and current margins. Live
 production data, zero credentials. Native prices are **satoshis per USD**
 (inverse): `USD/BTC = 100,000,000 / price`.
+
+## The `sidepit` command
+
+One command drives the whole client. Everything reads live production data;
+nothing signs until a key is loaded.
+
+```sh
+sidepit                  # the cockpit — book, positions, plain-english prompt
+sidepit doggie           # the wallet view — your wealth as one number, two buttons
+sidepit list             # your wallets (never prints a secret)
+sidepit use <name>       # switch the active wallet
+sidepit import           # add a key you already have (12 words or WIF)
+```
+
+Inside the app: `ctrl+d` toggles the wallet view, `ctrl+a` opens the wallet
+list, `ctrl+q` quits. Logs go to `~/.sidepit/tui.log`.
 
 ## Point your agent at the right door
 

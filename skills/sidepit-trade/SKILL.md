@@ -34,4 +34,6 @@ test (far-off limit, rest, cancel — proven in sixty seconds, zero cost).
 
 Onboarding a human first? `skills/sidepit-onboarding`. Working at a present
 trader's direction instead? `skills/sidepit-broker`. Want the simple view?
-The TUI's doggie wallet (ctrl+d).
+The wallet screen — `sidepit doggie`, or `ctrl+d` from the cockpit (`sidepit`).
+If the human has not set the client up yet: `./install_sidepit` builds it and
+leaves that one command behind.

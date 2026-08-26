@@ -174,9 +174,12 @@ class AccountsScreen(ModalScreen[None]):
         if not name:
             return
         keystore.set_active(name)
-        row = keystore.active_identity()
+        row = keystore.identity(name)      # by-name: env must not outrank a
+        if not row:                        # wallet the human just picked
+            self.app.add_event("err", f"wallet '{name}' could not be loaded")
+            return
         self.app.add_event("sys", f"switched to '{name}'")
-        self.app.start_bridge(row["sidepit_id"], row["wif"])
+        self.app.start_bridge(row["sidepit_id"], row["wif"], name=name)
         self.dismiss(None)
 
     def _selected(self) -> str | None:

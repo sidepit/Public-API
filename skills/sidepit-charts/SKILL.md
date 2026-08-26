@@ -14,7 +14,7 @@ Public-API repository root; setup as in the trade skill (venv + tests).
 
 ```python
 from sidepit_trader import RequestClient
-req = RequestClient()                       # api.sidepit.com; SIDEPIT_HOST overrides
+req = RequestClient()                       # api.sidepit.com
 ticker = req.active_product().active_contract_product.product.ticker
 ```
 
