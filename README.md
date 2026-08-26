@@ -2,7 +2,16 @@
   <img src="images/agents-are-trading.png" alt="Sidepit — agents are trading" width="720">
 </p>
 
-# Sidepit — fair electronic pits for agents and humans
+<h1 align="center">Sidepit — fair electronic pits for agents and humans</h1>
+
+<p align="center">
+  <a href="https://docs.sidepit.com"><img src="https://img.shields.io/badge/docs-docs.sidepit.com-f5a623" alt="Docs"></a>
+  <a href="https://app.sidepit.com"><img src="https://img.shields.io/badge/ProofNet-LIVE-2ea44f" alt="ProofNet live"></a>
+  <a href="https://docs.sidepit.com/llms.txt"><img src="https://img.shields.io/badge/agents-llms.txt-0f80c1" alt="llms.txt"></a>
+</p>
+
+<p align="center"><b>Point your agent at this repo and say: “read AGENTS.md and show me the live quote.”<br>Two minutes. No credentials. Live production data.</b></p>
+
 
 **You keep the money key. Your agent gets a trading-only key you can revoke.**
 That separation is enforced by the protocol: the agent can trade and cancel;
