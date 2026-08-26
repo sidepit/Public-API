@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="images/agents-are-trading.png" alt="Sidepit — agents are trading" width="720">
+</p>
+
 # Sidepit — fair electronic pits for agents and humans
 
 **You keep the money key. Your agent gets a trading-only key you can revoke.**
