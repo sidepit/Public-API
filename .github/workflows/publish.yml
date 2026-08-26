@@ -73,7 +73,7 @@ jobs:
         with:
           name: python-package
           path: dist
-      - uses: pypa/gh-action-pypi-publish@7f25271a4aa483500f742f9492b2ab5648d61011 # v1.12.4
+      - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           repository-url: https://test.pypi.org/legacy/
 
@@ -89,4 +89,4 @@ jobs:
         with:
           name: python-package
           path: dist
-      - uses: pypa/gh-action-pypi-publish@7f25271a4aa483500f742f9492b2ab5648d61011 # v1.12.4
+      - uses: pypa/gh-action-pypi-publish@release/v1
