@@ -55,16 +55,50 @@ The LOCK transaction tells Sidepit which account to credit: its input must spend
 from the Sidepit ID controlled by the customer. An external wallet or exchange
 sending straight to the lock address does not identify the intended account.
 
-## Install and run
+## Claude + Sidepit: two terminals
+
+Install the cockpit and SDK from anywhere, then clone the skills:
+
+```sh
+pip install sidepit
+git clone --recurse-submodules https://github.com/sidepit/Public-API
+```
+
+Prefer an isolated app install? Use `pipx install sidepit`. If your system
+requires a virtual environment:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 pip install sidepit
+```
+
+Terminal one — the cockpit:
+
+```sh
 sidepit
 ```
 
-Then, any time that environment is active:
+Terminal two — Claude with the Sidepit playbook:
+
+```sh
+cd Public-API
+claude
+```
+
+Tell Claude:
+
+> Read `skills/sidepit-onboarding/SKILL.md` and onboard me.
+
+**Claude | Sidepit | make money!** Your key, your sizing, your risk, your call.
+
+Using Sidepit as a Python SDK? The same installation gives your code:
+
+```python
+from sidepit_trader import RequestClient, Signer, Submitter
+```
+
+The installed commands:
 
 ```sh
 sidepit                  # cockpit: book, positions, plain-English prompt
@@ -133,6 +167,7 @@ deducts them from available balance and reports them in `realized_fees`.
 | `Public-API-Data/` | **the contract**: `sidepit_api.proto` (submodule) — every message the exchange speaks |
 | `python-client/facade/` | optional local REST/WS gateway over the wire |
 | `integrations/ccxt/` | CCXT adapter (runs over the facade) |
+| `DISTRIBUTION.md` | what ships today and the skills/update/Windows roadmap |
 
 Development install from a clone: `pip install -e .` (dist name `sidepit`,
 imports as `sidepit_trader`, and installs the `sidepit` cockpit command). The
