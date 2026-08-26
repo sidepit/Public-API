@@ -36,9 +36,10 @@ from .intents import HELP, Intent, parse
 
 HOST_DEFAULT = "api.sidepit.com"
 
-# palette (TUI-Design-Handoff — match exactly)
+# palette (TUI-Design-Handoff — restrained phosphor green + warm action gold)
 BG = "#0a0e0a"
 PANEL = "#0e140e"
+BGCARD = "#101810"
 BORDER = "#1a2620"
 TEXT = "#b8c4b0"
 DIM = "#5a6a55"
@@ -105,8 +106,11 @@ def usd_hint(price_sats: int) -> str:
 
 
 def title(text: str) -> str:
-    """── panel title ── (the handoff's panel grammar: lowercase, letter-spaced)."""
-    return f"[{DIM}]──[/] [{BRIGHT}]{' '.join(text.lower())}[/] [{DIM}]──[/]"
+    """Track short labels for the cockpit feel; keep long headings unbroken."""
+    label = text.lower()
+    if len(label) <= 16:
+        label = " ".join(label)
+    return f"[{DIM}]──[/] [bold {BRIGHT}]{label}[/] [{DIM}]──[/]"
 
 
 def qr_unicode(data: str) -> str:
@@ -203,9 +207,10 @@ class SidepitApp(App):
                 ("ctrl+d", "doggie", "doggie view")]
     CSS = f"""
     Screen {{ background: {BG}; color: {TEXT}; }}
-    #topbar {{ height: 1; background: {PANEL}; }}
-    #titlebar {{ height: 1; width: 1fr; background: {PANEL}; color: {DIM};
-                 padding: 0 1; }}
+    #topbar {{ height: 3; background: {PANEL}; border-bottom: solid {BORDER};
+               align-vertical: middle; }}
+    #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
+                 padding: 0 1; content-align-vertical: middle; }}
     #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
     #wallet-pick SelectCurrent {{ height: 1; border: none;
                                   background: {PANEL}; color: {GOLD}; }}
@@ -222,11 +227,15 @@ class SidepitApp(App):
     #envelope {{ border: solid {GREEN_DIM}; background: {PANEL}; padding: 0 1;
                  height: auto; }}
     #book {{ height: auto; }}
-    #log {{ height: 1fr; background: {BG}; }}
-    #promptrow {{ height: 1; background: {PANEL}; }}
-    #promptlabel {{ width: 18; color: {GREEN}; background: {PANEL};
+    #activity-title {{ height: 1; margin-top: 1; }}
+    #log {{ height: 1fr; min-height: 9; background: {PANEL};
+            border: solid {BORDER}; padding: 0 1; }}
+    #promptrow {{ height: 3; background: {BGCARD}; border: solid {GREEN_DIM};
+                  padding: 0 1; align-vertical: middle; }}
+    #promptlabel {{ width: 19; height: 1; color: {GREEN}; background: {BGCARD};
                     text-style: bold; }}
-    #prompt {{ width: 1fr; background: {PANEL}; border: none; color: {BRIGHT}; }}
+    #prompt {{ width: 1fr; height: 1; background: {BGCARD}; border: none;
+               color: {BRIGHT}; }}
     #prompt:focus {{ border: none; }}
     #prompt .input--placeholder {{ color: {DIM}; text-style: italic; }}
     #prompt .input--cursor {{ background: {GREEN}; color: {BG}; }}
@@ -244,14 +253,30 @@ class SidepitApp(App):
     Underline > .underline--bar {{ color: {GREEN_DIM}; }}
     #working {{ background: {PANEL}; border: solid {BORDER}; }}
     .hint {{ color: {DIM}; height: auto; }}
-    .formrow {{ height: 3; }}
-    .bigbtn {{ width: 1fr; height: 3; text-style: bold; margin: 0 0 0 0; }}
-    .formrow Input {{ width: 26; }}
+    .flow-shell {{ width: 120; max-width: 100%; height: auto; align-horizontal: center;
+                   margin-top: 1; }}
+    .flow-row {{ width: 120; max-width: 100%; height: auto; align-horizontal: center; }}
+    .flow-card {{ width: 58; max-width: 50%; height: auto; margin: 0 1;
+                  padding: 1 2; border: solid {BORDER}; background: {BGCARD};
+                  overflow: hidden hidden; }}
+    .flow-card .paneltitle {{ margin-top: 0; }}
+    #tab-fund, #tab-withdraw, #tab-delegates {{ align: center top; }}
+    #fund-state {{ width: 116; max-width: 100%; margin: 1 1 0 1; }}
+    #delegate-shell {{ width: 112; max-width: 100%; height: auto;
+                       align-horizontal: center; margin-top: 1; }}
+    #delegate-card {{ width: 112; max-width: 100%; height: auto; padding: 1 2;
+                      border: solid {BORDER}; background: {BGCARD}; }}
+    .formrow {{ width: 52; max-width: 100%; height: 3; }}
+    .bigbtn {{ width: 52; max-width: 100%; min-width: 0; height: 3; text-style: bold;
+               margin: 0 0 0 0; }}
+    .formrow Input {{ width: 1fr; min-width: 0; }}
+    .formrow Button {{ width: auto; min-width: 16; }}
     /* the amount row is a STEP, not a footnote: label above, full-width
        field with a gold edge so the eye lands on it before the button */
     .fieldlabel {{ height: 1; margin-top: 1; }}
-    .amtrow {{ height: 3; }}
-    .amtrow Input {{ width: 1fr; border: tall {GOLD}; background: {BG}; }}
+    .amtrow {{ width: 52; max-width: 100%; height: 3; }}
+    .amtrow Input {{ width: 1fr; min-width: 0; border: tall {GOLD};
+                     background: {BG}; }}
     .amtrow Input:focus {{ border: tall {BRIGHT}; }}
     .chip {{ width: 9; height: 3; margin-left: 1; }}
     #confirm-grid, #secret-grid {{
@@ -286,13 +311,14 @@ class SidepitApp(App):
             yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
-                with Horizontal():
+                with Horizontal(id="cockpit-grid"):
                     with Vertical(id="left"):
                         yield Static(title("positions"), classes="paneltitle")
                         yield Static("", id="positions", classes="panel")
                         yield Static("", id="envelope")
                     with Vertical(id="mid"):
                         yield Static("", id="book", classes="panel")
+                        yield Static(title("activity"), id="activity-title")
                         yield RichLog(markup=True, wrap=True, id="log")
                         with Horizontal(id="promptrow"):
                             yield Label("trader@sidepit ›", id="promptlabel")
@@ -306,30 +332,29 @@ class SidepitApp(App):
                         yield WorkingOrders(id="working")
                         yield Static(f"[{DIM}]right-click a row to cancel[/]",
                                      classes="hint")
-                        yield Static(title("TRY"), classes="paneltitle")
+                        yield Static(title("try"), classes="paneltitle")
                         for i, p in enumerate(TRY_PROMPTS):
                             yield Button(f"› {p}", classes="try", id=f"try-{i}")
             with TabPane("fund", id="tab-fund"):
-                with Horizontal():
-                    with Vertical(classes="panel"):
+                with Horizontal(id="fund-flow", classes="flow-shell"):
+                    with Vertical(classes="flow-card"):
                         yield Static(title("1 · fund"), classes="paneltitle")
                         yield Button("FUND — send btc to this address",
                                      id="fund-show", classes="bigbtn")
                         yield Static("", id="deposit")
                         yield Static("", id="qr")
                         yield Button("refresh on-chain", id="chain-refresh")
-                    with Vertical():
-                        with Container(classes="panel"):
-                            yield Static(title("2 · lock"), classes="paneltitle")
-                            yield Button("LOCK — fund the account", id="lock-all",
-                                         classes="bigbtn")
-                            yield Static("", id="lock-status", classes="hint")
+                    with Vertical(classes="flow-card"):
+                        yield Static(title("2 · lock"), classes="paneltitle")
+                        yield Button("LOCK — fund the account", id="lock-all",
+                                     classes="bigbtn")
+                        yield Static("", id="lock-status", classes="hint")
                         yield Static(f"[{DIM}]money OUT (unlock · exit) lives on "
                                      f"the withdraw tab[/]", classes="hint")
             with TabPane("withdraw", id="tab-withdraw"):
-                with Horizontal():
-                    with Vertical():
-                        with Container(classes="panel"):
+                with Vertical(id="withdraw-flow", classes="flow-shell"):
+                    with Horizontal(classes="flow-row"):
+                        with Container(classes="flow-card"):
                             yield Static(title("1 · unlock"), classes="paneltitle")
                             yield Static(f"[{BRIGHT}]how much?[/]  "
                                          f"[{DIM}]leave it empty for everything[/]",
@@ -341,25 +366,25 @@ class SidepitApp(App):
                             yield Button("UNLOCK — request funds back",
                                          id="unlock-all", classes="bigbtn")
                             yield Static("", id="unlock-status", classes="hint")
-                        with Container(classes="panel"):
+                        with Container(classes="flow-card"):
                             yield Static(title("2 · exit"), classes="paneltitle")
-                            yield Button("EXIT — leave sidepit", id="exit-all",
-                                         classes="bigbtn")
                             with Horizontal(classes="formrow"):
                                 yield Input(placeholder="destination bc1q… address",
                                             id="exit-dest")
+                            yield Button("EXIT — leave sidepit", id="exit-all",
+                                         classes="bigbtn")
                             yield Static("", id="exit-status", classes="hint")
-                        yield Static("", id="fund-state", classes="panel")
+                    yield Static("", id="fund-state", classes="panel")
             with TabPane("delegates", id="tab-delegates"):
-                with Vertical():
-                    yield Label(f"[{DIM}]custody key appoints; the delegate trades — "
-                                f"it can never appoint, revoke, or withdraw "
-                                f"(courier rule)[/]")
-                    yield DataTable(id="delegates")
-                    with Horizontal(classes="formrow"):
-                        yield Button("mint agent key", variant="primary", id="mint")
-                        yield Button("revoke selected", variant="warning", id="revoke")
-                    with Container(classes="panel"):
+                with Vertical(id="delegate-shell"):
+                    with Container(id="delegate-card"):
+                        yield Static(title("delegated trading"), classes="paneltitle")
+                        yield Label(f"[{DIM}]the custody key appoints; a delegate can "
+                                    f"trade, but can never appoint, revoke, or withdraw[/]")
+                        yield DataTable(id="delegates")
+                        with Horizontal(classes="formrow"):
+                            yield Button("mint agent key", variant="primary", id="mint")
+                            yield Button("revoke selected", variant="warning", id="revoke")
                         yield Static(title("register a delegate"), classes="paneltitle")
                         with Horizontal(classes="formrow"):
                             yield Input(placeholder="delegate pubkey (33-byte hex) — "
@@ -648,12 +673,22 @@ class SidepitApp(App):
         mode = ("watch" if s.watch_only else
                 ("agent" if s.delegate_active else "agent · unverified")
                 if s.is_delegate else "signing")
+        spread = s.ask - s.bid if s.ask and s.bid else 0
+        account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
         self._q("#titlebar", Static).update(
             f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
-            f"{dot} [{BRIGHT}]{s.state}[/] {s.ticker}   "
-            f"[{DIM}]{s.address[:10]}…{s.address[-4:] if s.address else ''} · "
-            f"{mode}[/]" +
-            (f"   [{DIM}]closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
+            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]   "
+            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]   "
+            f"[{GOLD}]last {s.last or '—'}[/]  [{BRIGHT}]{usd_hint(s.last)}[/]   "
+            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]   "
+            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]   "
+            f"[{DIM}]spread {spread or '—'}[/]\n"
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  [{DIM}]· {mode} ·[/]  "
+            f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
+            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → "
+            f"{s.tick_value_sats} sat[/]  [{DIM}]· ctrl+d[/] [{GOLD}]doggie[/]  "
+            f"[{DIM}]· session {s.session_id or '—'}[/]"
+            + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
             f"{dot} auction sync · envelope: "
