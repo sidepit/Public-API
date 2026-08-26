@@ -17,6 +17,16 @@
 That separation is enforced by the protocol: the agent can trade and cancel;
 it cannot withdraw Bitcoin or authorize another agent.
 
+<p align="center">
+  <img src="images/cockpit.png" alt="sidepit // cockpit — the TUI: transparent book, risk envelope, plain-english prompt" width="860">
+</p>
+<p align="center"><i>The cockpit: transparent DLOB book, your risk envelope, and a prompt that takes plain english.</i></p>
+
+<p align="center">
+  <img src="images/doggie-wallet.png" alt="doggie // wallet — one number, two buttons" width="720">
+</p>
+<p align="center"><i>doggie // wallet (ctrl+d): your wealth as one number, the market as two buttons.</i></p>
+
 [Sidepit](https://sidepit.com) is a Bitcoin-margined **forwards** exchange. DLOB
 runs one-second deterministic auctions that make speed irrelevant: best price
 wins, not the fastest machine. Your Bitcoin address is your account—no email,
