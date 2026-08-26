@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # install_sidepit — set up the client, then hand back one command: `sidepit`.
 #
-# Safe to run more than once: it only adds what is missing and never touches
-# your keys (~/.sidepit is left exactly as it is).
+# Safe to run more than once: it re-checks the environment and brings
+# dependencies up to date. It never touches your keys (~/.sidepit is left
+# exactly as it is).
 set -euo pipefail
 
 ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -35,9 +36,15 @@ fi
 say "installing dependencies…"
 "$VENV/bin/pip" install --quiet --upgrade pip
 "$VENV/bin/pip" install --quiet -r "$ROOT/python-client/requirements.txt"
+"$VENV/bin/pip" install --quiet -r "$ROOT/users-cli/requirements.txt"
+# the SDK itself, editable: `sidepit_trader` must be importable from any
+# directory, and -e keeps a git pull live without reinstalling
+"$VENV/bin/pip" install --quiet -e "$ROOT/python-client"
 
-# 3. Prove it works before promising anything
-if ! "$VENV/bin/python" -c "import textual, pynng" 2>/dev/null; then
+# 3. Prove it works before promising anything — import exactly what the app
+# needs, from a directory that is NOT the repo, so a stray sys.path entry
+# cannot make a broken install look fine.
+if ! (cd / && "$VENV/bin/python" -c "import textual, qrcode, pynng, sidepit_trader") 2>/dev/null; then
   echo "sidepit: dependencies did not install cleanly — see the output above." >&2
   exit 1
 fi
