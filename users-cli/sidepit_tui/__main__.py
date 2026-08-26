@@ -61,11 +61,18 @@ def _cli(argv: list[str]) -> int:
     return 2
 
 
+def main(argv: list[str] | None = None) -> int | None:
+    """Installed ``sidepit`` command and ``python -m sidepit_tui`` entry point."""
+    from .app import main as run_app
+    args = sys.argv[1:] if argv is None else argv
+    if args and args[0] in ("doggie", "wallet"):
+        run_app(start_doggie=True)       # same app, opens on the wallet view
+        return None
+    if args:
+        return _cli(args)
+    run_app()
+    return None
+
+
 if __name__ == "__main__":
-    from .app import main
-    if len(sys.argv) > 1 and sys.argv[1] in ("doggie", "wallet"):
-        main(start_doggie=True)          # same app, opens on the wallet view
-    elif len(sys.argv) > 1:
-        sys.exit(_cli(sys.argv[1:]))
-    else:
-        main()
+    sys.exit(main())

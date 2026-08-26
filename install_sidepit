@@ -39,7 +39,7 @@ say "installing dependencies…"
 "$VENV/bin/pip" install --quiet -r "$ROOT/users-cli/requirements.txt"
 # the SDK itself, editable: `sidepit_trader` must be importable from any
 # directory, and -e keeps a git pull live without reinstalling
-"$VENV/bin/pip" install --quiet -e "$ROOT/python-client"
+"$VENV/bin/pip" install --quiet -e "$ROOT"
 
 # 3. Prove it works before promising anything — import exactly what the app
 # needs, from a directory that is NOT the repo, so a stray sys.path entry

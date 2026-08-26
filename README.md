@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="images/agents-are-trading.png" alt="Sidepit — agents are trading" width="720">
+  <img src="https://raw.githubusercontent.com/sidepit/Public-API/main/images/agents-are-trading.png" alt="Sidepit — agents are trading" width="720">
 </p>
 
 <h1 align="center">Sidepit — fair electronic pits for agents and humans</h1>
@@ -18,12 +18,12 @@ That separation is enforced by the protocol: the agent can trade and cancel;
 it cannot withdraw Bitcoin or authorize another agent.
 
 <p align="center">
-  <img src="images/cockpit.png" alt="sidepit // cockpit — the TUI: transparent book, risk envelope, plain-english prompt" width="860">
+  <img src="https://raw.githubusercontent.com/sidepit/Public-API/main/images/cockpit.png" alt="sidepit // cockpit — the TUI: transparent book, risk envelope, plain-english prompt" width="860">
 </p>
 <p align="center"><i>The cockpit: transparent DLOB book, live position and risk envelope, and a prompt that takes plain english.</i></p>
 
 <p align="center">
-  <img src="images/doggie-wallet.png" alt="doggie // wallet — one number, two buttons" width="720">
+  <img src="https://raw.githubusercontent.com/sidepit/Public-API/main/images/doggie-wallet.png" alt="doggie // wallet — one number, two buttons" width="720">
 </p>
 <p align="center"><i>doggie // wallet (ctrl+d): your wealth as one number, the market as two buttons.</i></p>
 
@@ -55,6 +55,25 @@ The LOCK transaction tells Sidepit which account to credit: its input must spend
 from the Sidepit ID controlled by the customer. An external wallet or exchange
 sending straight to the lock address does not identify the intended account.
 
+## Install and run
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install sidepit
+sidepit
+```
+
+Then, any time that environment is active:
+
+```sh
+sidepit                  # cockpit: book, positions, plain-English prompt
+sidepit doggie           # wallet view: your wealth as one number, two buttons
+sidepit list             # your wallets
+sidepit use <name>       # switch wallet
+sidepit import           # add a key (12 words or WIF, hidden input)
+```
+
 ## Look before you trust (no keys, about 2 minutes)
 
 ```sh
@@ -75,14 +94,6 @@ production data, zero credentials. Native prices are **satoshis per USD**
 
 One command drives the whole client. Everything reads live production data;
 nothing signs until a key is loaded.
-
-```sh
-sidepit                  # the cockpit — book, positions, plain-english prompt
-sidepit doggie           # the wallet view — your wealth as one number, two buttons
-sidepit list             # your wallets (never prints a secret)
-sidepit use <name>       # switch the active wallet
-sidepit import           # add a key you already have (12 words or WIF)
-```
 
 Inside the app: `ctrl+d` toggles the wallet view, `ctrl+a` opens the wallet
 list, `ctrl+q` quits. Logs go to `~/.sidepit/tui.log`.
@@ -123,9 +134,9 @@ deducts them from available balance and reports them in `realized_fees`.
 | `python-client/facade/` | optional local REST/WS gateway over the wire |
 | `integrations/ccxt/` | CCXT adapter (runs over the facade) |
 
-Optional install as a package: `pip install -e python-client` (dist name
-`sidepit`, imports as `sidepit_trader`). The examples run straight from the
-clone either way.
+Development install from a clone: `pip install -e .` (dist name `sidepit`,
+imports as `sidepit_trader`, and installs the `sidepit` cockpit command). The
+examples run straight from the clone either way.
 
 ## The wire
 
