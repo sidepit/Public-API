@@ -52,7 +52,14 @@ def project_account_requests(tpo) -> list[dict]:
 def project_unlock_records(tpo) -> list[dict]:
     """accountops.unlock_records → plain dicts. A restart-rebuilt RESERVED row
     may be sparse — nothing here requires unlock_tx to render."""
-    name = pb.UnlockRecord.UnlockStatus.Name
+    def name(value) -> str:
+        # An unknown status must never take down a caller mid-render: proto's
+        # Name() raises on values this build's enum does not carry.
+        try:
+            return pb.UnlockRecord.UnlockStatus.Name(value)
+        except ValueError:
+            return f"UNLOCK_UNKNOWN_{int(value)}"
+
     return [{
         "status_name": name(r.status),
         "amount_sats": r.amount_sats,

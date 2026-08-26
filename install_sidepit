@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# install_sidepit — set up the client, then hand back one command: `sidepit`.
+#
+# Safe to run more than once: it re-checks the environment and brings
+# dependencies up to date. It never touches your keys (~/.sidepit is left
+# exactly as it is).
+set -euo pipefail
+
+ROOT="$(cd -P "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="$ROOT/python-client/.venv"
+BIN="${HOME}/.local/bin"
+
+say() { printf '  %s\n' "$*"; }
+
+echo
+echo "sidepit — installing the client"
+echo
+
+# 1. Python
+if ! command -v python3 >/dev/null 2>&1; then
+  echo "sidepit: python3 not found. Install Python 3.10+ and run this again." >&2
+  exit 1
+fi
+ver="$(python3 -c 'import sys; print("%d.%d" % sys.version_info[:2])')"
+case "$ver" in
+  3.1[0-9]|3.[2-9][0-9]) ;;                      # 3.10+
+  *) echo "sidepit: Python $ver found, 3.10+ required." >&2; exit 1 ;;
+esac
+say "python $ver"
+
+# 2. Virtual environment + dependencies
+if [ ! -x "$VENV/bin/python" ]; then
+  say "creating the environment…"
+  python3 -m venv "$VENV"
+fi
+say "installing dependencies…"
+"$VENV/bin/pip" install --quiet --upgrade pip
+"$VENV/bin/pip" install --quiet -r "$ROOT/python-client/requirements.txt"
+"$VENV/bin/pip" install --quiet -r "$ROOT/users-cli/requirements.txt"
+# the SDK itself, editable: `sidepit_trader` must be importable from any
+# directory, and -e keeps a git pull live without reinstalling
+"$VENV/bin/pip" install --quiet -e "$ROOT/python-client"
+
+# 3. Prove it works before promising anything — import exactly what the app
+# needs, from a directory that is NOT the repo, so a stray sys.path entry
+# cannot make a broken install look fine.
+if ! (cd / && "$VENV/bin/python" -c "import textual, qrcode, pynng, sidepit_trader") 2>/dev/null; then
+  echo "sidepit: dependencies did not install cleanly — see the output above." >&2
+  exit 1
+fi
+say "toolchain OK"
+
+# 4. Put `sidepit` on the PATH (a symlink, so git pulls stay live)
+chmod +x "$ROOT/sidepit"
+mkdir -p "$BIN"
+ln -sf "$ROOT/sidepit" "$BIN/sidepit"
+say "installed: $BIN/sidepit"
+
+echo
+if command -v sidepit >/dev/null 2>&1; then
+  echo "Ready. Run:  sidepit"
+else
+  echo "Ready. Run:  $ROOT/sidepit"
+  echo
+  echo "(To type just 'sidepit' from anywhere, add this to your shell profile:)"
+  echo "  export PATH=\"\$HOME/.local/bin:\$PATH\""
+fi
+echo

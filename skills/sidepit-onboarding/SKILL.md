@@ -44,12 +44,14 @@ same place: a funded account and an agent ready to trade.
 The TUI does the whole ceremony itself — keys, identities, delegation, and a
 live trading screen in one place:
 
-    cd Public-API/users-cli && ../python-client/.venv/bin/python -m pip -q install -r requirements.txt \
-      && ../python-client/.venv/bin/python -m sidepit_tui
+    cd Public-API && ./install_sidepit && sidepit
 
-- `python -m sidepit_tui import` — bring in a key (12 words or WIF, hidden
-  input), or let it mint a fresh identity
-- `python -m sidepit_tui list` / `use <name>` — manage identities
+`install_sidepit` runs once and leaves one command behind. From then on:
+
+- `sidepit` — the cockpit · `sidepit doggie` — the simple wallet view
+- `sidepit import` — bring in a key (12 words or WIF, hidden input), or let
+  it mint a fresh identity
+- `sidepit list` / `sidepit use <name>` — manage identities
 - Fund and activate exactly as in Path 1 steps 3-4 (the TUI shows your
   address and balance), then authorize your agent key from the same screen.
 

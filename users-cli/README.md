@@ -11,9 +11,17 @@ You can do everything here: **create your account → fund it → trade → with
 
 ```sh
 git clone https://github.com/sidepit/Public-API && cd Public-API
-python3 -m venv python-client/.venv
-python-client/.venv/bin/pip install -r python-client/requirements.txt -r users-cli/requirements.txt
-cd users-cli && ../python-client/.venv/bin/python -m sidepit_tui
+./install_sidepit          # once — builds the environment, installs `sidepit`
+sidepit                    # the cockpit
+```
+
+Then, any time:
+
+```sh
+sidepit                  # cockpit: book, positions, plain-english prompt
+sidepit doggie           # wallet view: your wealth as one number, two buttons
+sidepit list             # your wallets     sidepit use <name>   switch wallet
+sidepit import           # add a key (12 words or WIF, hidden input)
 ```
 
 ## First run — your identity
@@ -49,6 +57,10 @@ cancel all · go flat    cancel everything / close everything
 risk · book · help      your envelope · the live book · the grammar
 ```
 
+The top-bar **BTC / SATS** selector changes money amounts everywhere in the
+cockpit, including the unlock input. Switching it converts an amount exactly;
+the exchange still receives integer sats on the wire.
+
 Things to know about the venue (the UI repeats them where it matters):
 
 - **Nothing resolves on button press.** Orders resolve in the next DLOB
@@ -75,9 +87,10 @@ Hand trading to a bot or AI agent **without giving it your money**:
 
 ## Withdraw & leave (the `withdraw` tab)
 
-- **UNLOCK** — one tap requests **everything withdrawable** back. The exchange
-  sends BTC to your own address (there is no destination to mistype, by
-  design). One open unlock at a time.
+- **UNLOCK** — enter an amount in the selected BTC/SATS denomination, or click
+  **MAX** to put `MAX` in the field and request **everything withdrawable**.
+  The exchange sends BTC to your own address (there is no destination to
+  mistype, by design). One open unlock at a time.
 - **EXIT** — sweeps your entire on-chain balance to any address you choose.
 
 ## Handy
@@ -87,7 +100,6 @@ python -m sidepit_tui import [name]   # paste 12 words or a WIF (hidden input)
 python -m sidepit_tui watch <bc1q…>   # read-only identity
 python -m sidepit_tui list            # your identities (never prints secrets)
 python -m sidepit_tui use <name>      # switch; in-app: ctrl+a
-SIDEPIT_HOST=… python -m sidepit_tui  # point at another venue host
 ```
 
 If right-click is pasting instead of canceling, your terminal is eating the

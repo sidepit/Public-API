@@ -317,9 +317,9 @@ def cmd_public_account(args) -> int:
     print(f"available margin {int(a.available_margin):,} sats")
     for sym, cm in sorted(a.contract_margins.items()):
         for tick, pos in sorted(cm.positions.items()):
-            rp = int(pos.risk_position)
+            rp = int(pos.position.position)
             if rp:
-                print(f"position         {tick} {rp:+d}")
+                print(f"position         {tick} {rp:+d} @ avg {pos.position.avg_price:g}")
     open_orders = [of.order for of in tp.orderfills.values()
                    if int(of.order.open_qty) > int(of.order.filled_qty)]
     print(f"resting orders   {len(open_orders)}")
@@ -376,9 +376,9 @@ def cmd_status(args) -> int:
     print(f"available margin {int(a.available_margin):,} sats")
     for sym, cm in sorted(a.contract_margins.items()):
         for tick, pos in sorted(cm.positions.items()):
-            rp = int(pos.risk_position)
+            rp = int(pos.position.position)
             if rp:
-                print(f"position         {tick} {rp:+d}")
+                print(f"position         {tick} {rp:+d} @ avg {pos.position.avg_price:g}")
     open_orders = [of.order for of in tp.orderfills.values()
                    if int(of.order.open_qty) > int(of.order.filled_qty)]
     print(f"resting orders   {len(open_orders)}")

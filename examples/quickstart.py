@@ -48,7 +48,7 @@ def network_help(exc):
 
 
 def main():
-    req = RequestClient()                    # api.sidepit.com (SIDEPIT_HOST to override)
+    req = RequestClient()                    # api.sidepit.com
     try:
         ap = req.active_product()            # the canonical first call
         state = pb.ExchangeState.Name(ap.exchange_status.status.estate)

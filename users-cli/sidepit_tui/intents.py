@@ -44,8 +44,16 @@ def _contracts(qty_raw: str, is_btc: bool, last_sats: int, contract_usd: int) ->
         return int(q)
     if last_sats <= 0 or contract_usd <= 0:
         raise ValueError("no live price to convert btc notional — use contracts")
-    # q BTC = q*1e8 sats; one contract = contract_usd * last_sats sats of notional
-    return max(1, round(q * 1e8 / (contract_usd * last_sats)))
+    # q BTC = q*1e8 sats; one contract = contract_usd * last_sats sats of notional.
+    # NEVER round a sub-contract request up: asking for 0.001 BTC (~$79) and
+    # getting one $500 contract is a silent 6x. Say the real number instead.
+    exact = q * 1e8 / (contract_usd * last_sats)
+    usd = q * 1e8 / last_sats
+    if exact < 1:
+        raise ValueError(
+            f"{q:g} BTC is about ${usd:,.0f} — less than one contract "
+            f"(${contract_usd:,} each). Size in contracts: 'buy 1 at market'")
+    return int(exact)          # truncate: never more exposure than asked for
 
 
 def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:

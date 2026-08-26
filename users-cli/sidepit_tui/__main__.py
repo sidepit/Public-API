@@ -7,6 +7,7 @@ file per identity — see sidepit_trader/keystore.py):
     python -m sidepit_tui watch <bc1q…>   # add a watch-only identity
     python -m sidepit_tui list            # identities (no secrets printed)
     python -m sidepit_tui use <name>      # switch the active identity
+    python -m sidepit_tui doggie          # open straight into the wallet view
 """
 import sys
 
@@ -14,6 +15,9 @@ import sys
 def _cli(argv: list[str]) -> int:
     from sidepit_trader import keystore, wallet
     cmd = argv[0]
+    if cmd in ("-h", "--help", "help"):
+        print(__doc__)
+        return 0
     if cmd == "import":
         import getpass
         from sidepit_trader import mnemonic
@@ -58,7 +62,10 @@ def _cli(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        sys.exit(_cli(sys.argv[1:]))
     from .app import main
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] in ("doggie", "wallet"):
+        main(start_doggie=True)          # same app, opens on the wallet view
+    elif len(sys.argv) > 1:
+        sys.exit(_cli(sys.argv[1:]))
+    else:
+        main()

@@ -47,7 +47,11 @@ def _parse(path: Path) -> dict:
         line = line.strip()
         if line.startswith("export ") and "=" in line:
             k, v = line[len("export "):].split("=", 1)
-            out[k.strip()] = v.strip().strip('"')
+            # Accept EITHER quote style: these files are hand-edited and
+            # written by several tools. A WIF left wrapped in apostrophes
+            # reaches base58 as literal characters and blows up far away
+            # ("Invalid character '''") — strip both here, once.
+            out[k.strip()] = v.strip().strip('"').strip("'")
     return out
 
 
@@ -99,6 +103,21 @@ def identities() -> list[dict]:
         out.append({"name": p.stem, "sidepit_id": d["SIDEPIT_ID"],
                     "has_key": "SIDEPIT_WIF" in d, "active": p.stem == act})
     return out
+
+
+def identity(name: str) -> dict | None:
+    """{name, sidepit_id, wif|None} for ONE named identity, read straight from
+    its file. Unlike active_identity() this ignores the process env — a picker
+    that lets the human choose a wallet must get the wallet they chose, not
+    whatever SIDEPIT_WIF happens to be exported in the shell."""
+    p = _path(name)
+    if not p.exists():
+        return None
+    d = _parse(p)
+    if "SIDEPIT_ID" not in d:
+        return None
+    return {"name": name, "sidepit_id": d["SIDEPIT_ID"],
+            "wif": d.get("SIDEPIT_WIF")}
 
 
 def active_name() -> str | None:

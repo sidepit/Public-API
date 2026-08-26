@@ -18,8 +18,10 @@ green · [warn] gold · [err] red.
 """
 from __future__ import annotations
 
+import os
 import time
 from datetime import datetime, timezone
+from decimal import Decimal, InvalidOperation
 
 from textual import events
 from textual.app import App, ComposeResult
@@ -27,17 +29,18 @@ from textual.containers import Container, Grid, Horizontal, Vertical
 from textual.coordinate import Coordinate
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Input, Label, RichLog, Static,
-                             TabbedContent, TabPane)
+from textual.widgets import (Button, DataTable, Input, Label, RichLog, Select,
+                             Static, TabbedContent, TabPane)
 
 from .bridge import Bridge, Snap
 from .intents import HELP, Intent, parse
 
 HOST_DEFAULT = "api.sidepit.com"
 
-# palette (TUI-Design-Handoff — match exactly)
+# palette (TUI-Design-Handoff — restrained phosphor green + warm action gold)
 BG = "#0a0e0a"
 PANEL = "#0e140e"
+BGCARD = "#101810"
 BORDER = "#1a2620"
 TEXT = "#b8c4b0"
 DIM = "#5a6a55"
@@ -52,7 +55,7 @@ CYAN = "#5ab4c4"
 TRY_PROMPTS = [
     "show me the book before i send",
     "what's my risk in btc terms",
-    "buy 0.001 btc at market",
+    "buy 1 at market",
     "cancel all working orders",
     "go flat and exit",
 ]
@@ -71,10 +74,6 @@ def ui_update(fn):
         except NoMatches:
             pass
     return inner
-
-
-def sats(v: int) -> str:
-    return f"{v:,}"
 
 
 def btc(v_sats: int, signed: bool = False) -> str:
@@ -104,8 +103,11 @@ def usd_hint(price_sats: int) -> str:
 
 
 def title(text: str) -> str:
-    """── panel title ── (the handoff's panel grammar: lowercase, letter-spaced)."""
-    return f"[{DIM}]──[/] [{BRIGHT}]{' '.join(text.lower())}[/] [{DIM}]──[/]"
+    """Track short labels for the cockpit feel; keep long headings unbroken."""
+    label = text.lower()
+    if len(label) <= 16:
+        label = " ".join(label)
+    return f"[{DIM}]──[/] [bold {BRIGHT}]{label}[/] [{DIM}]──[/]"
 
 
 def qr_unicode(data: str) -> str:
@@ -202,7 +204,16 @@ class SidepitApp(App):
                 ("ctrl+d", "doggie", "doggie view")]
     CSS = f"""
     Screen {{ background: {BG}; color: {TEXT}; }}
-    #titlebar {{ height: 1; background: {PANEL}; color: {DIM}; padding: 0 1; }}
+    #topbar {{ height: 3; background: {PANEL}; border-bottom: solid {BORDER};
+               align-vertical: middle; }}
+    #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
+                 padding: 0 1; content-align-vertical: middle; }}
+    #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
+    #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
+    #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
+                                                            background: {PANEL};
+                                                            color: {GOLD}; }}
+    #wallet-pick SelectOverlay, #denom-pick SelectOverlay {{ border: tall {GOLD}; }}
     #statbar  {{ height: 1; background: {PANEL}; color: {DIM}; padding: 0 1; }}
     TabbedContent {{ height: 1fr; }}
     Tabs {{ background: {BG}; }}
@@ -215,11 +226,15 @@ class SidepitApp(App):
     #envelope {{ border: solid {GREEN_DIM}; background: {PANEL}; padding: 0 1;
                  height: auto; }}
     #book {{ height: auto; }}
-    #log {{ height: 1fr; background: {BG}; }}
-    #promptrow {{ height: 1; background: {PANEL}; }}
-    #promptlabel {{ width: 18; color: {GREEN}; background: {PANEL};
+    #activity-title {{ height: 1; margin-top: 1; }}
+    #log {{ height: 1fr; min-height: 9; background: {PANEL};
+            border: solid {BORDER}; padding: 0 1; }}
+    #promptrow {{ height: 3; background: {BGCARD}; border: solid {GREEN_DIM};
+                  padding: 0 1; align-vertical: middle; }}
+    #promptlabel {{ width: 19; height: 1; color: {GREEN}; background: {BGCARD};
                     text-style: bold; }}
-    #prompt {{ width: 1fr; background: {PANEL}; border: none; color: {BRIGHT}; }}
+    #prompt {{ width: 1fr; height: 1; background: {BGCARD}; border: none;
+               color: {BRIGHT}; }}
     #prompt:focus {{ border: none; }}
     #prompt .input--placeholder {{ color: {DIM}; text-style: italic; }}
     #prompt .input--cursor {{ background: {GREEN}; color: {BG}; }}
@@ -237,9 +252,32 @@ class SidepitApp(App):
     Underline > .underline--bar {{ color: {GREEN_DIM}; }}
     #working {{ background: {PANEL}; border: solid {BORDER}; }}
     .hint {{ color: {DIM}; height: auto; }}
-    .formrow {{ height: 3; }}
-    .bigbtn {{ width: 1fr; height: 3; text-style: bold; margin: 0 0 0 0; }}
-    .formrow Input {{ width: 26; }}
+    .flow-shell {{ width: 120; max-width: 100%; height: auto; align-horizontal: center;
+                   margin-top: 1; }}
+    .flow-row {{ width: 120; max-width: 100%; height: auto; align-horizontal: center; }}
+    .flow-card {{ width: 58; max-width: 50%; height: auto; margin: 0 1;
+                  padding: 1 2; border: solid {BORDER}; background: {BGCARD};
+                  overflow: hidden hidden; }}
+    .flow-card .paneltitle {{ margin-top: 0; }}
+    #tab-fund, #tab-withdraw, #tab-delegates {{ align: center top; }}
+    #fund-state {{ width: 116; max-width: 100%; margin: 1 1 0 1; }}
+    #delegate-shell {{ width: 112; max-width: 100%; height: auto;
+                       align-horizontal: center; margin-top: 1; }}
+    #delegate-card {{ width: 112; max-width: 100%; height: auto; padding: 1 2;
+                      border: solid {BORDER}; background: {BGCARD}; }}
+    .formrow {{ width: 52; max-width: 100%; height: 3; }}
+    .bigbtn {{ width: 52; max-width: 100%; min-width: 0; height: 3; text-style: bold;
+               margin: 0 0 0 0; }}
+    .formrow Input {{ width: 1fr; min-width: 0; }}
+    .formrow Button {{ width: auto; min-width: 16; }}
+    /* the amount row is a STEP, not a footnote: label above, full-width
+       field with a gold edge so the eye lands on it before the button */
+    .fieldlabel {{ height: 1; margin-top: 1; }}
+    .amtrow {{ width: 52; max-width: 100%; height: 3; }}
+    .amtrow Input {{ width: 1fr; min-width: 0; border: tall {GOLD};
+                     background: {BG}; }}
+    .amtrow Input:focus {{ border: tall {BRIGHT}; }}
+    .chip {{ width: 9; height: 3; margin-left: 1; }}
     #confirm-grid, #secret-grid {{
         grid-size: 2; grid-gutter: 1 2; grid-rows: auto auto;
         padding: 1 2; width: 72; height: auto;
@@ -255,6 +293,7 @@ class SidepitApp(App):
         self.host = host
         self.bridge: Bridge | None = None
         self.snap = Snap()
+        self.denom = "BTC"
 
     def _q(self, selector, _type=None):
         """Query the BASE screen — widget updates must keep landing while a
@@ -263,18 +302,59 @@ class SidepitApp(App):
         base = self.screen_stack[0]
         return base.query_one(selector) if _type is None else base.query_one(selector, _type)
 
+    def money(self, v_sats: int, signed: bool = False) -> str:
+        """Format a satoshi amount in the user's global display denomination."""
+        if self.denom == "SATS":
+            sign = "+" if signed and v_sats >= 0 else ""
+            return f"{sign}{v_sats:,} sats"
+        return btc(v_sats, signed=signed)
+
+    @staticmethod
+    def _parse_money_input(raw: str, denom: str) -> int | None:
+        """Unlock text → sats. Blank and MAX both mean the full amount."""
+        value = raw.strip().replace(",", "")
+        if not value or value.upper() == "MAX":
+            return None
+        if denom == "SATS":
+            if not value.isdigit() or int(value) <= 0:
+                raise ValueError("enter a positive whole number of sats")
+            return int(value)
+        try:
+            amount = Decimal(value)
+        except InvalidOperation as exc:
+            raise ValueError("enter a positive BTC amount") from exc
+        if not amount.is_finite():
+            raise ValueError("enter a positive BTC amount")
+        sats_exact = amount * Decimal(100_000_000)
+        if amount <= 0 or sats_exact != sats_exact.to_integral_value():
+            raise ValueError("BTC supports at most 8 decimal places")
+        return int(sats_exact)
+
+    @staticmethod
+    def _money_input(v_sats: int, denom: str) -> str:
+        if denom == "SATS":
+            return f"{v_sats:,}"
+        return format(Decimal(v_sats) / Decimal(100_000_000), "f")
+
     # --- composition --------------------------------------------------------
     def compose(self) -> ComposeResult:
-        yield Static("sidepit // cockpit · connecting…", id="titlebar")
+        with Horizontal(id="topbar"):
+            yield Static("sidepit // cockpit · connecting…", id="titlebar")
+            # Always-visible wallet switcher — ctrl+a still opens the full
+            # table, but nobody has to know the shortcut exists.
+            yield Select([("₿ BTC", "BTC"), ("sat SATS", "SATS")], value="BTC",
+                         id="denom-pick", allow_blank=False)
+            yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
-                with Horizontal():
+                with Horizontal(id="cockpit-grid"):
                     with Vertical(id="left"):
                         yield Static(title("positions"), classes="paneltitle")
                         yield Static("", id="positions", classes="panel")
                         yield Static("", id="envelope")
                     with Vertical(id="mid"):
                         yield Static("", id="book", classes="panel")
+                        yield Static(title("activity"), id="activity-title")
                         yield RichLog(markup=True, wrap=True, id="log")
                         with Horizontal(id="promptrow"):
                             yield Label("trader@sidepit ›", id="promptlabel")
@@ -288,53 +368,60 @@ class SidepitApp(App):
                         yield WorkingOrders(id="working")
                         yield Static(f"[{DIM}]right-click a row to cancel[/]",
                                      classes="hint")
-                        yield Static(title("TRY"), classes="paneltitle")
+                        yield Static(title("try"), classes="paneltitle")
                         for i, p in enumerate(TRY_PROMPTS):
                             yield Button(f"› {p}", classes="try", id=f"try-{i}")
             with TabPane("fund", id="tab-fund"):
-                with Horizontal():
-                    with Vertical(classes="panel"):
+                with Horizontal(id="fund-flow", classes="flow-shell"):
+                    with Vertical(classes="flow-card"):
                         yield Static(title("1 · fund"), classes="paneltitle")
                         yield Button("FUND — send btc to this address",
                                      id="fund-show", classes="bigbtn")
                         yield Static("", id="deposit")
                         yield Static("", id="qr")
                         yield Button("refresh on-chain", id="chain-refresh")
-                    with Vertical():
-                        with Container(classes="panel"):
-                            yield Static(title("2 · lock"), classes="paneltitle")
-                            yield Button("LOCK — fund the account", id="lock-all",
-                                         classes="bigbtn")
-                            yield Static("", id="lock-status", classes="hint")
+                    with Vertical(classes="flow-card"):
+                        yield Static(title("2 · lock"), classes="paneltitle")
+                        yield Button("LOCK — fund the account", id="lock-all",
+                                     classes="bigbtn")
+                        yield Static("", id="lock-status", classes="hint")
                         yield Static(f"[{DIM}]money OUT (unlock · exit) lives on "
                                      f"the withdraw tab[/]", classes="hint")
             with TabPane("withdraw", id="tab-withdraw"):
-                with Horizontal():
-                    with Vertical():
-                        with Container(classes="panel"):
+                with Vertical(id="withdraw-flow", classes="flow-shell"):
+                    with Horizontal(classes="flow-row"):
+                        with Container(classes="flow-card"):
                             yield Static(title("1 · unlock"), classes="paneltitle")
+                            yield Static(f"[{BRIGHT}]how much?[/]  "
+                                         f"[{DIM}]leave it empty for everything[/]",
+                                         classes="fieldlabel")
+                            with Horizontal(classes="amtrow"):
+                                yield Input(placeholder="BTC (e.g. 0.005)",
+                                            id="unlock-amt")
+                                yield Button("MAX", id="unlock-max",
+                                             classes="chip")
                             yield Button("UNLOCK — request funds back",
                                          id="unlock-all", classes="bigbtn")
                             yield Static("", id="unlock-status", classes="hint")
-                        with Container(classes="panel"):
+                        with Container(classes="flow-card"):
                             yield Static(title("2 · exit"), classes="paneltitle")
-                            yield Button("EXIT — leave sidepit", id="exit-all",
-                                         classes="bigbtn")
                             with Horizontal(classes="formrow"):
                                 yield Input(placeholder="destination bc1q… address",
                                             id="exit-dest")
+                            yield Button("EXIT — leave sidepit", id="exit-all",
+                                         classes="bigbtn")
                             yield Static("", id="exit-status", classes="hint")
-                        yield Static("", id="fund-state", classes="panel")
+                    yield Static("", id="fund-state", classes="panel")
             with TabPane("delegates", id="tab-delegates"):
-                with Vertical():
-                    yield Label(f"[{DIM}]custody key appoints; the delegate trades — "
-                                f"it can never appoint, revoke, or withdraw "
-                                f"(courier rule)[/]")
-                    yield DataTable(id="delegates")
-                    with Horizontal(classes="formrow"):
-                        yield Button("mint agent key", variant="primary", id="mint")
-                        yield Button("revoke selected", variant="warning", id="revoke")
-                    with Container(classes="panel"):
+                with Vertical(id="delegate-shell"):
+                    with Container(id="delegate-card"):
+                        yield Static(title("delegated trading"), classes="paneltitle")
+                        yield Label(f"[{DIM}]the custody key appoints; a delegate can "
+                                    f"trade, but can never appoint, revoke, or withdraw[/]")
+                        yield DataTable(id="delegates")
+                        with Horizontal(classes="formrow"):
+                            yield Button("mint agent key", variant="primary", id="mint")
+                            yield Button("revoke selected", variant="warning", id="revoke")
                         yield Static(title("register a delegate"), classes="paneltitle")
                         with Horizontal(classes="formrow"):
                             yield Input(placeholder="delegate pubkey (33-byte hex) — "
@@ -344,7 +431,13 @@ class SidepitApp(App):
                         yield Static("", id="del-derived")
         yield Static("", id="statbar")
 
+    open_doggie_on_start = False       # set by `sidepit doggie`
+
     def on_mount(self) -> None:
+        self.refresh_wallets()
+        if self.open_doggie_on_start:
+            # after onboarding/bridge start, so the view opens with live state
+            self.call_after_refresh(self.action_doggie)
         w = self._q("#working", WorkingOrders)
         w.add_columns("side", "qty", "px", "id")
         w.cursor_type = "row"
@@ -357,7 +450,14 @@ class SidepitApp(App):
         load_or_onboard(self)
 
     # --- bridge lifecycle (called by onboard / account switcher) -------------
-    def start_bridge(self, address: str, wif: str | None) -> None:
+    wallet_name: str | None = None      # which WALLET this session runs on
+
+    def start_bridge(self, address: str, wif: str | None,
+                     name: str | None = None) -> None:
+        # The session's identity is the WALLET, not the account address: an
+        # agent key and that account's own key share an address but are
+        # different sessions (AGENT vs SIGNING). Track the name.
+        self.wallet_name = name
         if self.bridge is not None:      # switching: retire the old thread
             self.bridge.stop()
             self.bridge = None
@@ -372,10 +472,19 @@ class SidepitApp(App):
         self.bridge.start()
         mode = "watch-only" if wif is None else "custody key loaded"
         self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        self.refresh_wallets()     # keep the dropdown honest after any switch
         self.add_event("sys", HELP)
+        # A delegate may TRADE and cancel — never move money or change who is
+        # authorized (the courier rule; the engine enforces it too). Offering
+        # those buttons to a delegate only produces confusing rejections.
+        deleg = self.bridge is not None and self.bridge.snap.is_delegate
         for bid in ("lock-all", "unlock-all", "exit-all", "mint", "revoke",
                     "register"):
-            self._q(f"#{bid}", Button).disabled = wif is None
+            self._q(f"#{bid}", Button).disabled = wif is None or deleg
+        if deleg:
+            self.add_event("sys", "delegate key: trading enabled · fund, "
+                                  "withdraw and delegate changes need the "
+                                  "account owner's key")
 
     def right_click_cancel(self, oid: str) -> None:
         if self.bridge is None or self.snap.watch_only:
@@ -401,6 +510,12 @@ class SidepitApp(App):
     # --- snapshot → widgets ---------------------------------------------------
     @ui_update
     def apply_snap(self, s: Snap) -> None:
+        # A retiring bridge can post one last snapshot AFTER a wallet switch;
+        # applying it repaints the old account over the new session (the
+        # picker appears to do nothing). Each Bridge owns its own Snap, so
+        # identity tells us whether this one is still ours.
+        if self.bridge is None or s is not self.bridge.snap:
+            return
         self.snap = s
         self._refresh_bars()
         self._refresh_book()
@@ -418,9 +533,9 @@ class SidepitApp(App):
             color = GREEN if upnl >= 0 else RED
             lines.append(
                 f"[{BRIGHT}]{p['ticker']}[/] {side} {abs(qty)} "
-                f"[{DIM}]·[/] [{BRIGHT}]{btc(notional)}[/]\n"
+                f"[{DIM}]·[/] [{BRIGHT}]{self.money(notional)}[/]\n"
                 f"  entry {p['entry_price']} · mark {s.last or '—'} · "
-                f"pnl [{color}]{btc(upnl, signed=True)}[/]\n"
+                f"pnl [{color}]{self.money(upnl, signed=True)}[/]\n"
                 f"  [{DIM}]entry resets daily at settlement · "
                 f"{p['open_bids']}b/{p['open_asks']}a working[/]")
         self._q("#positions", Static).update(
@@ -435,24 +550,38 @@ class SidepitApp(App):
         state = (f"[{RED}]RESTRICTED — reduce only[/]" if s.is_restricted
                  else f"[{GREEN}]SAFE[/]")
         self._q("#envelope", Static).update(
-            f"{title('risk envelope')}\n"
-            f"equity    [{BRIGHT}]{btc(equity)}[/] [{DIM}]${eq_usd:,.0f}[/]\n"
-            f"margin    [{BRIGHT}]{btc(used)}[/]\n"
-            f"free      [{BRIGHT}]{btc(s.available_margin)}[/]\n"
-            f"unlocking [{BRIGHT}]{btc(s.pending_unlock)}[/]\n"
+            f"{title('risk')}\n"
+            f"equity    [{BRIGHT}]{self.money(equity)}[/] [{DIM}]${eq_usd:,.0f}[/]\n"
+            f"margin    [{BRIGHT}]{self.money(used)}[/]\n"
+            f"free      [{BRIGHT}]{self.money(s.available_margin)}[/]\n"
+            f"unlocking [{BRIGHT}]{self.money(s.pending_unlock)}[/]\n"
             + (f"realized  [{GREEN if s.realized_pnl >= 0 else RED}]"
-               f"{btc(s.realized_pnl, signed=True)}[/]\n"
+               f"{self.money(s.realized_pnl, signed=True)}[/]\n"
                f"open      [{GREEN if unreal_total >= 0 else RED}]"
-               f"{btc(unreal_total, signed=True)}[/]\n" if s.is_open else
-               f"[{DIM}]settled — pnl folded into balance[/]\n")
+               f"{self.money(unreal_total, signed=True)}[/]\n" if s.is_open else
+               f"[{DIM}]settled: marked-to-market[/]\n")
             + f"[{GREEN_DIM}]{'█' * fill}{'░' * (barw - fill)}[/] {state}\n"
-            + f"[{DIM}]btc-denominated · no USD shock liq.[/]")
+            + f"[{DIM}]btc-denominated[/]")
         # session / delegation (honest, per the handoff)
         active = [d for d in s.delegates if d["is_active"]]
         pend = [d for d in s.delegates if d["pending"]]
-        dlines = [f"custody  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
-                  else "custody  —",
-                  f"mode     [{GOLD}]{'WATCH-ONLY' if s.watch_only else 'SIGNING'}[/]"]
+        # Three honest modes: WATCH (no key) · SIGNING (the account's own key,
+        # can move money) · AGENT (a delegate key — trades this account, can
+        # never withdraw or appoint). AGENT also states whether the ENGINE has
+        # verified it, because an unverified agent's orders bounce RC_ID.
+        if s.watch_only:
+            mode = f"[{DIM}]WATCH[/]"
+        elif s.is_delegate:
+            mode = (f"[{GREEN}]AGENT[/] · verified" if s.delegate_active
+                    else f"[{RED}]AGENT[/] · not authorized yet")
+        else:
+            mode = f"[{GOLD}]SIGNING[/]"
+        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
+                  else "account  —",
+                  f"mode     {mode}"]
+        if s.is_delegate:
+            dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
+                          f"account key[/]")
         for d in active:
             dlines.append(f"[{GREEN}]● delegate[/] {d['trader_id'][:14]}… active")
         for d in pend:
@@ -473,8 +602,8 @@ class SidepitApp(App):
         # fund tab
         self._q("#deposit", Static).update(
             f"[{BRIGHT}]{s.address}[/]\n"
-            f"on-chain [{BRIGHT}]{sats(s.chain_confirmed)}[/] sats confirmed · "
-            f"{sats(s.chain_mempool)} incoming\n"
+            f"on-chain [{BRIGHT}]{self.money(s.chain_confirmed)}[/] confirmed · "
+            f"{self.money(s.chain_mempool)} incoming\n"
             f"[{DIM}](updated "
             f"{datetime.fromtimestamp(s.chain_at).strftime('%H:%M:%S') if s.chain_at else 'never'})[/]")
         qrw = self._q("#qr", Static)
@@ -483,18 +612,21 @@ class SidepitApp(App):
             qrw._qr_done = True
         self._update_fund_buttons(s)
         ulines = [
-            f"equity {btc(equity)} (${eq_usd:,.2f}) · withdrawable now "
-            f"{btc(s.available_margin)} · pending unlock {btc(s.pending_unlock)}",
+            f"equity {self.money(equity)} (${eq_usd:,.2f}) · withdrawable now "
+            f"{self.money(s.available_margin)} · pending unlock "
+            f"{self.money(s.pending_unlock)}",
             f"[{DIM}]unlock lifecycle: RESERVED (margin debited) → PROCESSING "
             f"(BTC broadcast) → COMPLETED — or REJECTED · one open unlock per "
             f"account[/]"]
         for u in s.unlock_records[-5:]:
             st = u["status_name"].removeprefix("UNLOCK_")
             c = (GREEN if st == "COMPLETED" else RED if st == "REJECTED" else GOLD)
-            row = (f"[{c}]{st}[/] {btc(u['amount_sats'])}"
+            row = (f"[{c}]{st}[/] {self.money(u['amount_sats'])}"
                    f" [{DIM}]{u['oid'][-14:]}[/]")
             if u["btc_txid"]:
-                row += (f" [link=https://mempool.space/tx/{u['btc_txid']}]"
+                # Textual markup needs the value QUOTED — a bare URL (with its
+                # ':' and '//') is parsed as markup and raises MarkupError.
+                row += (f" [link='https://mempool.space/tx/{u['btc_txid']}']"
                         f"mempool.space/tx/{u['btc_txid'][:12]}…[/link]")
             ulines.append(row)
         self._q("#fund-state", Static).update("\n".join(ulines))
@@ -522,7 +654,7 @@ class SidepitApp(App):
         # LOCK: lights up the moment funds are SEEN (mempool included)
         if local > 0:
             lock.variant = "success"
-            lock.label = f"LOCK — fund the account ({sats(local)} sats)"
+            lock.label = f"LOCK — fund the account ({self.money(local)})"
             self._q("#lock-status", Static).update(
                 f"[{GREEN}]funds detected[/] — one tap forwards your ENTIRE "
                 f"balance (unconfirmed included) to the exchange; the network "
@@ -533,14 +665,34 @@ class SidepitApp(App):
             self._q("#lock-status", Static).update(
                 f"[{DIM}]nothing on-chain yet — FUND first[/]")
 
-        # UNLOCK: lights up when there's equity on the exchange
+        # UNLOCK: lights up when there's equity on the exchange. The amount
+        # field decides MAX vs an explicit request — the label follows it so
+        # the button always states what the tap will actually do.
         if equity > 0:
+            raw = self._q("#unlock-amt", Input).value
+            invalid = None
+            try:
+                want = self._parse_money_input(raw, self.denom)
+            except ValueError as exc:
+                want, invalid = None, str(exc)
             unlock.variant = "success"
-            unlock.label = f"UNLOCK — request funds back ({btc(equity)})"
-            self._q("#unlock-status", Static).update(
-                f"[{GREEN}]you have funds on sidepit[/] — one tap requests "
-                f"EVERYTHING withdrawable back to your address (applies live "
-                f"in-session)")
+            unlock.label = (f"UNLOCK — request {self.money(want)} back" if want
+                            else f"UNLOCK — request funds back ({self.money(equity)})")
+            if invalid:
+                self._q("#unlock-status", Static).update(
+                    f"[{RED}]{invalid}[/] — or click MAX")
+            elif want and want > s.available_margin:
+                self._q("#unlock-status", Static).update(
+                    f"[{GOLD}]{self.money(want)} is more than the "
+                    f"{self.money(s.available_margin)} withdrawable now[/] — send it "
+                    f"and the exchange decides; a rejected unlock shows in the "
+                    f"records below")
+            else:
+                self._q("#unlock-status", Static).update(
+                    f"[{GREEN}]you have funds on sidepit[/] — "
+                    + (f"requesting {self.money(want)}" if want else
+                       "MAX requests EVERYTHING withdrawable")
+                    + " back to your address (applies live in-session)")
         else:
             unlock.variant = "default"
             unlock.label = "UNLOCK — request funds back"
@@ -552,7 +704,7 @@ class SidepitApp(App):
             exit_.variant = "warning"
             self._q("#exit-status", Static).update(
                 f"[{GOLD}]sweeps your ENTIRE on-chain balance "
-                f"({sats(local)} sats) to the address above — leaving sidepit[/]")
+                f"({self.money(local)}) to the address above — leaving sidepit[/]")
         else:
             exit_.variant = "default"
             self._q("#exit-status", Static).update(
@@ -563,18 +715,30 @@ class SidepitApp(App):
     def _refresh_bars(self) -> None:
         s = self.snap
         dot = f"[{GREEN}]●[/]" if s.is_open else f"[{DIM}]●[/]"
-        mode = "WATCH-ONLY" if s.watch_only else "signing"
+        mode = ("watch" if s.watch_only else
+                ("agent" if s.delegate_active else "agent · unverified")
+                if s.is_delegate else "signing")
+        spread = s.ask - s.bid if s.ask and s.bid else 0
+        account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
         self._q("#titlebar", Static).update(
             f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
-            f"{dot} [{BRIGHT}]{s.state}[/] {s.ticker}   "
-            f"[{DIM}]{s.address[:10]}…{s.address[-4:] if s.address else ''} · "
-            f"{mode}[/]" +
-            (f"   [{DIM}]closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
+            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]   "
+            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]   "
+            f"[{GOLD}]last {s.last or '—'}[/]  [{BRIGHT}]{usd_hint(s.last)}[/]   "
+            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]   "
+            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]   "
+            f"[{DIM}]spread {spread or '—'}[/]\n"
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  [{DIM}]· {mode} ·[/]  "
+            f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
+            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → "
+            f"{s.tick_value_sats} sat[/]  [{DIM}]· ctrl+d[/] [{GOLD}]doggie[/]  "
+            f"[{DIM}]· session {s.session_id or '—'}[/]"
+            + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
             f"{dot} auction sync · envelope: "
             f"[{RED if s.is_restricted else GREEN}]{env}[/] · book: transparent · "
-            f"denom: BTC · session {s.session_id or '—'}")
+            f"denom: [{GOLD}]{self.denom}[/] · session {s.session_id or '—'}")
 
     @ui_update
     def _refresh_book(self) -> None:
@@ -641,6 +805,90 @@ class SidepitApp(App):
             self.notify(text, severity=sev, timeout=7)
 
     # --- the prompt loop ---------------------------------------------------------
+    def refresh_wallets(self) -> None:
+        """(Re)fill the wallet dropdown from the keystore and show the active
+        one. Called at mount and after every switch/import/mint."""
+        from sidepit_trader import keystore
+        try:
+            ids = keystore.identities()
+        except Exception:
+            return
+        sel = self._q("#wallet-pick", Select)
+        opts = [(f"{i['name']}  {i['sidepit_id'][-6:]}"
+                 f"{'' if i['has_key'] else ' (watch)'}", i["name"])
+                for i in ids]
+        sel.set_options(opts)
+        # Show the wallet the SESSION is on — by NAME first (two wallets can
+        # share an account: its own key and an agent key), then by address,
+        # then the ACTIVE file. A dropdown already showing a name can't be
+        # re-picked, so getting this wrong strands the human.
+        names = {i["name"] for i in ids}
+        cur = self.wallet_name if self.wallet_name in names else None
+        cur = cur or next((i["name"] for i in ids
+                           if i["sidepit_id"] == self.snap.address), None)
+        cur = cur or next((i["name"] for i in ids if i["active"]), None)
+        if cur:
+            with self.prevent(Select.Changed):     # don't re-switch on refill
+                sel.value = cur
+
+    @ui_update
+    def on_select_changed(self, event: Select.Changed) -> None:
+        if event.select.id == "denom-pick":
+            new_denom = str(event.value)
+            if new_denom not in ("BTC", "SATS") or new_denom == self.denom:
+                return
+            field = self._q("#unlock-amt", Input)
+            raw = field.value
+            try:
+                amount = self._parse_money_input(raw, self.denom)
+            except ValueError:
+                amount = None
+            self.denom = new_denom
+            field.placeholder = ("BTC (e.g. 0.005)" if new_denom == "BTC"
+                                 else "sats (e.g. 500,000)")
+            if raw.strip().upper() == "MAX":
+                field.value = "MAX"
+            elif amount is not None:
+                field.value = self._money_input(amount, new_denom)
+            if self.bridge is not None and self.snap is self.bridge.snap:
+                self.apply_snap(self.snap)
+            else:
+                self._refresh_bars()
+                self._update_fund_buttons(self.snap)
+            return
+        if event.select.id != "wallet-pick":
+            return
+        from sidepit_trader import keystore
+        name = str(event.value)
+        # The "nothing selected" sentinel differs across Textual versions
+        # (BLANK / NULL) — trust the keystore instead of the sentinel name.
+        if name not in {i["name"] for i in keystore.identities()}:
+            return
+        keystore.set_active(name)
+        # by-name, NOT active_identity(): env vars outrank the keystore there,
+        # so an exported SIDEPIT_WIF would silently keep the old session.
+        row = keystore.identity(name)
+        if not row:
+            self.add_event("err", f"wallet '{name}' could not be loaded")
+            return
+        # Compare WALLET NAMES, not addresses: an agent key and its account's
+        # own key report the same account, so an address check made
+        # agent -> custody -> agent a silent no-op.
+        if name == self.wallet_name:
+            return
+        if os.environ.get("SIDEPIT_WIF") or os.environ.get("SIDEPIT_ID"):
+            self.add_event("warn", "SIDEPIT_WIF/ID are set in your shell — the "
+                                   "picker now wins for this session; unset "
+                                   "them to avoid confusion")
+        self.add_event("sys", f"switched to '{name}'")
+        self.start_bridge(row["sidepit_id"], row["wif"], name=name)
+
+    def on_input_changed(self, event: Input.Changed) -> None:
+        """The unlock button must always state what the tap will do, so the
+        amount field re-labels it on every keystroke."""
+        if event.input.id == "unlock-amt":
+            self._update_fund_buttons(self.snap)
+
     def on_input_submitted(self, event: Input.Submitted) -> None:
         if event.input.id != "prompt":
             return
@@ -667,12 +915,13 @@ class SidepitApp(App):
             used = sum(p["margin_required"] for p in s.positions)
             equity, unreal = equity_sats(s)
             eq_usd = equity / s.last if s.last else 0.0
-            pnl = (f"realized {btc(s.realized_pnl, signed=True)} · open "
-                   f"{btc(unreal, signed=True)}" if s.is_open
-                   else "settled (pnl folded into available balance)")
+            pnl = (f"realized {self.money(s.realized_pnl, signed=True)} · open "
+                   f"{self.money(unreal, signed=True)}" if s.is_open
+                   else "settled: marked-to-market")
             self.add_event("sys",
-                           f"equity {btc(equity)} (${eq_usd:,.2f}) · margin used "
-                           f"{btc(used)} · withdrawable {btc(s.available_margin)} · "
+                           f"equity {self.money(equity)} (${eq_usd:,.2f}) · margin used "
+                           f"{self.money(used)} · withdrawable "
+                           f"{self.money(s.available_margin)} · "
                            f"{pnl} · "
                            f"{'RESTRICTED' if s.is_restricted else 'SAFE'}")
             return
@@ -741,21 +990,33 @@ class SidepitApp(App):
                 return
             self.push_screen(
                 Confirm(f"Fund the account?\nYour ENTIRE on-chain balance "
-                        f"({sats(total)} sats) is forwarded to the exchange — "
+                        f"({self.money(total)}) is forwarded to the exchange — "
                         f"the network fee comes out of it. This broadcasts a "
                         f"REAL Bitcoin transaction.", yes="FUND"),
                 lambda ok: ok and b.cmd("lock_all"))
+        elif bid == "unlock-max":
+            self._q("#unlock-amt", Input).value = "MAX"
+            self._update_fund_buttons(self.snap)       # label follows instantly
+            return
         elif bid == "unlock-all":
             equity, _ = equity_sats(self.snap)
             if equity <= 0:
                 self.add_event("warn", "no exchange balance to withdraw — LOCK "
                                        "funds first, then trade")
                 return
+            raw = self._q("#unlock-amt", Input).value
+            try:
+                amount = self._parse_money_input(raw, self.denom)
+            except ValueError as exc:
+                self.add_event("err", f"unlock: {exc}, or click MAX")
+                return
+            what = (self.money(amount) if amount
+                    else "EVERYTHING withdrawable")
             self.push_screen(
-                Confirm(f"Request EVERYTHING withdrawable back to your own "
-                        f"address?\nApplies live in-session; the "
+                Confirm(f"Request {what} back to your own address?\n"
+                        f"Applies live in-session; the "
                         f"exchange sends the BTC — you sign nothing more."),
-                lambda ok: ok and b.cmd("unlock", None))
+                lambda ok: ok and b.cmd("unlock", amount))
         elif bid == "exit-all":
             dest = self._q("#exit-dest", Input).value.strip()
             if not dest.startswith("bc1"):
@@ -768,7 +1029,7 @@ class SidepitApp(App):
                 return
             self.push_screen(
                 Confirm(f"EXIT sidepit?\nYour ENTIRE on-chain balance "
-                        f"({sats(total)} sats, minus the network fee) is swept "
+                        f"({self.money(total)}, minus the network fee) is swept "
                         f"to:\n{dest}\nThis broadcasts a REAL Bitcoin "
                         f"transaction.", yes="EXIT"),
                 lambda ok: ok and b.cmd("exit_all", dest))
@@ -827,7 +1088,7 @@ class SidepitApp(App):
                               f"(env file written; secret not logged)")
 
 
-def main() -> None:
+def main(start_doggie: bool = False) -> None:
     import contextlib
     import logging
     import os
@@ -840,4 +1101,6 @@ def main() -> None:
     logging.basicConfig(filename=logpath, level=logging.INFO, force=True,
                         format="%(asctime)s %(name)s %(levelname)s %(message)s")
     with open(logpath, "a") as errlog, contextlib.redirect_stderr(errlog):
-        SidepitApp(host=os.environ.get("SIDEPIT_HOST", HOST_DEFAULT)).run()
+        app = SidepitApp(host=os.environ.get("SIDEPIT_HOST", HOST_DEFAULT))
+        app.open_doggie_on_start = start_doggie
+        app.run()
