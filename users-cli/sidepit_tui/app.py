@@ -494,7 +494,9 @@ class SidepitApp(App):
             row = (f"[{c}]{st}[/] {btc(u['amount_sats'])}"
                    f" [{DIM}]{u['oid'][-14:]}[/]")
             if u["btc_txid"]:
-                row += (f" [link=https://mempool.space/tx/{u['btc_txid']}]"
+                # Textual markup needs the value QUOTED — a bare URL (with its
+                # ':' and '//') is parsed as markup and raises MarkupError.
+                row += (f" [link='https://mempool.space/tx/{u['btc_txid']}']"
                         f"mempool.space/tx/{u['btc_txid'][:12]}…[/link]")
             ulines.append(row)
         self._q("#fund-state", Static).update("\n".join(ulines))
