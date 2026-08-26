@@ -1,7 +1,7 @@
 # sidepit // cockpit
 
 A terminal app for trading on [Sidepit](https://sidepit.com) — a Bitcoin-margined
-forwards exchange where orders clear in one-second batch auctions. Best price
+forwards exchange powered by DLOB one-second deterministic auctions. Best price
 wins; fastest machine does not.
 
 You can do everything here: **create your account → fund it → trade → withdraw
@@ -44,17 +44,19 @@ parser understood before anything executes:
 
 ```
 buy 5 @ 1610            limit: 5 contracts at 1610 sats-per-USD
-sell 0.001 btc at market market = a limit crossed through the touch
+sell 0.001 btc at market market = native IOC; unfilled remainder cancels
 cancel all · go flat    cancel everything / close everything
 risk · book · help      your envelope · the live book · the grammar
 ```
 
 Things to know about the venue (the UI repeats them where it matters):
 
-- **Nothing fills instantly.** Orders resolve at the next 1-second auction —
+- **Nothing resolves on button press.** Orders resolve in the next DLOB
+  one-second deterministic auction —
   watch *working orders* (right panel). **Right-click a working order to
   cancel it.**
-- **Limit orders only**; "market" is a marketable limit.
+- **Market orders are immediate-or-cancel:** they take available opposite
+  liquidity and cancel every unfilled remainder in that same auction.
 - Prices are sats-per-USD; your risk is **BTC-denominated** (equity = available
   balance + realized + open P&L while the session is open).
 

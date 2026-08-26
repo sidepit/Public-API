@@ -22,7 +22,7 @@ for delegate mode).
 | Endpoint | Maps to | Notes |
 |----------|---------|-------|
 | `GET /status` | reqrep `ACTIVE_PRODUCT` | exchange state (enum name), session, close time |
-| `GET /markets` | `ACTIVE_PRODUCT` per ticker | base/quote/settle explicit: USD/BTC:BTC inverse **dated future**; prices sats-per-USD |
+| `GET /markets` | `ACTIVE_PRODUCT` per ticker | base/quote/settle explicit: USD/BTC:BTC inverse **dated forward**; prices sats-per-USD |
 | `GET /ticker/{symbol}` | 12122 feed (cached) | 404 while exchange closed (feeds silent) |
 | `GET /orderbook/{symbol}` | 12122 depth (cached) | bids/asks best-first `[price, size]` |
 | `GET /trades/{symbol}` | 12124 fills (ring) | whole-venue prints |
@@ -46,10 +46,12 @@ channels `ticker`, `orderbook`, `trades`, `ohlcv`, `orders`, `my_trades`,
 
 ## Semantics the gateway preserves (not flattened)
 
-- **No instant acks.** The venue is a sequenced-batch CLOB with 1-second epochs;
+- **No outcome on button press.** The venue is a DLOB with one-second
+  deterministic auctions;
   order/cancel outcomes are observational (order feed + reject feed), surfaced via
   `/orders/{id}`, `/rejections/{address}`, and the WS channels.
-- **Limit orders only.** "Market" has no defined price under per-epoch sequencing.
+- **Native market orders are IOC.** Omit `price` (wire `price=0`); available
+  opposite liquidity fills and every unfilled remainder cancels in that auction.
 - **Prices are sats-per-USD** end to end; conversion is the client's single boundary.
 - **Reject codes by name** with an `expected` flag (`RC_CDUP`/`RC_CREJ` are normal in
   cancel-heavy flows; `RC_MARGIN`/`RC_REDUCE` are expected business outcomes).

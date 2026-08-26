@@ -7,7 +7,7 @@ Needs a FUNDED identity (mint one: `python -m sidepit_trader.wallet`, deposit to
 What it shows:
   - the Trader base: connect, seed state, react on the price-feed pulse
   - decide(ctx): runs only while EXCHANGE_OPEN, with the latest quote cached
-  - submitting a marketable limit (Sidepit has no native market order type)
+  - submitting a native immediate-or-cancel market order (`NewOrder.price = 0`)
   - order verbs return the full orderid string "{sidepit_id}:{timestamp_ns}" —
     the handle that identifies the order on every feed
   - fills arrive on the order feed (ctx.position); rejects on 12128
@@ -41,17 +41,14 @@ class HelloTaker(Trader):
         if self.sent:
             return
         q = ctx.quote
-        if not (q and (q.ask or q.last or q.bid)):
-            return                                    # zero = empty side; don't price off it
-        # Marketable limit: cross 2 ticks THROUGH the ask. Price is sats-per-USD.
+        if not q:
+            return
+        # Native market: price=0 on the wire; any unfilled remainder is canceled
+        # atomically in the same one-second DLOB deterministic auction.
         # Submitter signs (SHA256 -> ECDSA compact -> hex, signature_version=0)
         # and returns the full orderid string.
-        oid, px = ctx.submitter.market_order(side=1, size=1, ticker=ctx.ticker,
-                                             bid=q.bid, ask=q.ask, last=q.last,
-                                             cross_ticks=2)
-        if oid is None:
-            return
-        print(f"sent BUY 1 {ctx.ticker} @ {px} (orderid {oid})")
+        oid = ctx.submitter.market_order(side=1, size=1, ticker=ctx.ticker)
+        print(f"sent IOC MARKET BUY 1 {ctx.ticker} (orderid {oid})")
         print("outcomes arrive on the feeds: position updates on fill; "
               "12128 carries any rejection (RC_MARGIN = fund the account).")
         self.sent = True

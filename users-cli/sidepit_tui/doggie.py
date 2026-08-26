@@ -3,23 +3,23 @@
 Per the design handoff's DoggieWallet section: TWO BUTTONS, BTC and USD. Each
 tap shifts one unit of exposure between them; the user is choosing what
 currency their wealth is measured in (a denomination dial), and all the
-machinery — the inverse future, the 1s auction, the crossing — stays hidden.
+machinery — the inverse forward and the DLOB auction — stays hidden.
 Deliberately separate visual identity (orange/green on navy, big tactile
 buttons); do not blend with the cockpit's hacker-green.
 
 It is a SKIN over the same client core: same Bridge, same Snap, same
-`market` command the cockpit prompt uses — proof the architecture supports
-"cockpit view" and "doggie view" as two faces of one client (the handoff's
-stated test of doing it right).
+native IOC `market` command the cockpit prompt uses — proof the architecture
+supports "cockpit view" and "doggie view" as two faces of one client (the
+handoff's stated test of doing it right).
 
-v0 honesty (the concept note marks mechanics TBD; the sim's $10k unit is NOT
-decided product): here one tap = ONE contract (= $`Contract.unit_size`,
-currently $500) via a marketable limit into the next auction. Mapping on the
-inverse future: account equity starts 100% BTC (it IS bitcoin margin); being
-LONG p contracts of USDBTC = holding $p×size synthetically = hedged; p past
-your whole equity = net SHORT bitcoin; p negative = LEVERAGED long. Fully
-hedged ⇒ the USD value freezes while price swings — visible right here on the
-big number.
+Sizing honesty (the concept note's $10k unit is not decided product): here one
+tap = ONE contract (= $`Contract.unit_size`, currently $500) via a native
+immediate-or-cancel market order in the next DLOB deterministic auction. Mapping
+on the inverse forward: account equity starts 100% BTC (it IS bitcoin margin);
+being LONG p contracts of USDBTC = holding $p×size synthetically = hedged; p
+past your whole equity = net SHORT bitcoin; p negative = LEVERAGED long. Fully
+hedged ⇒ the USD value freezes while price swings—visible right here on the big
+number.
 """
 from __future__ import annotations
 
@@ -64,7 +64,7 @@ class DoggieScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dog-frame"):
-            yield Static("doggie // wallet · v0 · mechanics TBD · ctrl+d = cockpit",
+            yield Static("doggie // wallet · native IOC · ctrl+d = cockpit",
                          id="dog-title")
             yield Digits("0.00", id="dog-value")
             yield Static("", id="dog-sub")
@@ -129,8 +129,8 @@ class DoggieScreen(Screen):
         self.query_one("#dog-meter", Static).update(
             f"[{MUT}]short[/] [{color}]{bar}[/] [{MUT}]levered[/]")
         self.query_one("#dog-foot", Static).update(
-            f"[{MUT}]one tap = ${s.contract_usd} (1 contract) into the next "
-            f"1s auction[/]")
+            f"[{MUT}]one tap = ${s.contract_usd} (1 contract) · IOC in the next "
+            f"DLOB auction[/]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         b = self.app.bridge
@@ -143,8 +143,8 @@ class DoggieScreen(Screen):
         if event.button.id == "tap-usd":
             # toward dollars: hedge $unit more = BUY one USDBTC contract
             b.cmd("market", 1, 1)
-            self.app.add_event("ok", f"doggie tap → USD (+${s.contract_usd} hedged)")
+            self.app.add_event("ok", f"doggie IOC requested → USD (+${s.contract_usd})")
         elif event.button.id == "tap-btc":
             # toward bitcoin: unwind $unit of hedge = SELL one contract
             b.cmd("market", -1, 1)
-            self.app.add_event("ok", f"doggie tap → BTC (−${s.contract_usd} hedged)")
+            self.app.add_event("ok", f"doggie IOC requested → BTC (−${s.contract_usd})")

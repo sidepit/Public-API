@@ -15,8 +15,8 @@ import type { Balances, Dict, Int, Market, Num, OHLCV, Order, OrderBook, OrderSi
  * @class sidepit
  * @augments Exchange
  *
- * Sidepit is a deterministic one-second auction forwards venue (sequenced-batch CLOB,
- * NOT continuous matching and NOT a frequent batch auction) trading Bitcoin-margined
+ * Sidepit is a DLOB one-second deterministic-auction forwards venue (not continuous
+ * matching) trading Bitcoin-margined
  * dated USD forwards. Native prices are SATS-PER-USD (inverse). This class converts
  * once at the boundary: unified prices are BTC-per-USD = sats * 1e-8.
  *
@@ -52,7 +52,7 @@ export default class sidepit extends Exchange {
                 'option': false,
                 'cancelOrder': true,
                 'createMarketBuyOrderWithCost': false,
-                'createMarketOrder': false, // fills are salt-dependent under per-epoch sequencing; limit only
+                'createMarketOrder': true, // native IOC: NewOrder.price=0
                 'createMarketSellOrderWithCost': false,
                 'createOrder': true,
                 'createStopOrder': false,
@@ -61,7 +61,7 @@ export default class sidepit extends Exchange {
                 'fetchCurrencies': false,
                 'fetchDepositAddress': false,
                 'fetchFundingHistory': false,
-                'fetchFundingRate': false, // dated future: no funding, basis converges at expiry
+                'fetchFundingRate': false, // dated forward: no funding, basis converges at expiry
                 'fetchFundingRates': false,
                 'fetchLeverage': false,
                 'fetchMarkets': true,
@@ -160,7 +160,6 @@ export default class sidepit extends Exchange {
                     'no live': ExchangeNotAvailable,
                     'not accepting transactions': ExchangeNotAvailable,
                     'unknown orderid': OrderNotFound,
-                    'limit orders only': InvalidOrder,
                     'read-only': AuthenticationError,
                     'must be positive': BadRequest,
                 },
@@ -268,11 +267,14 @@ export default class sidepit extends Exchange {
     }
 
     serializeNewOrder (side: number, size: number, price: number, ticker: string) {
-        // NewOrder: side=11 sint32 (zigzag: 1 -> 2, -1 -> 1), size=20, price=30, ticker=40
+        // NewOrder: side=11 sint32, size=20, optional price=30, ticker=40.
+        // Native IOC market uses proto3-default price=0, so field 30 is omitted.
         const zigzag = (side >= 0) ? (2 * side) : (-2 * side - 1);
         let out = this.pbTag (11, 0).concat (this.pbVarint (zigzag));
         out = out.concat (this.pbTag (20, 0), this.pbVarint (size));
-        out = out.concat (this.pbTag (30, 0), this.pbVarint (price));
+        if (price !== 0) {
+            out = out.concat (this.pbTag (30, 0), this.pbVarint (price));
+        }
         out = out.concat (this.pbString (40, ticker));
         return out;
     }
@@ -346,7 +348,7 @@ export default class sidepit extends Exchange {
 
     parseMarket (market: Dict): Market {
         // base/quote/settle are EXPLICIT from the gateway — never inferred:
-        // USD priced in satoshis, margined and settled in BTC; inverse DATED future.
+        // USD priced in satoshis, margined and settled in BTC; inverse DATED forward.
         const id = this.safeString (market, 'id');
         const base = this.safeString (market, 'base');       // 'USD'
         const quote = this.safeString (market, 'quote');     // 'BTC'
@@ -696,24 +698,27 @@ export default class sidepit extends Exchange {
     /**
      * @method
      * @name sidepit#createOrder
-     * @description submit a LIMIT order (the only type: under per-epoch sequencing a
-     * market order's fill is salt-dependent, so it is not exposed). The order does
-     * NOT resolve instantly — it enters the next 1-second batch. The returned order
+     * @description submit a limit order or native immediate-or-cancel market order.
+     * Market orders omit price and serialize NewOrder.price=0. The order does
+     * NOT resolve on submission — it enters the next DLOB deterministic auction. The returned order
      * has status 'open' optimistically; confirm observationally with fetchOrder /
      * fetchOpenOrders / watchOrders, and check fetchRejections for RC_* outcomes.
      * @param {string} symbol unified market symbol
-     * @param {string} type must be 'limit'
+     * @param {string} type 'limit' or 'market'
      * @param {string} side 'buy' or 'sell'
      * @param {float} amount contracts (integer)
-     * @param {float} price BTC-per-USD (converted once to native sats-per-USD)
+     * @param {float} price BTC-per-USD for limit orders; omit for market
      */
     async createOrder (symbol: string, type: OrderType, side: OrderSide, amount: number, price: Num = undefined, params = {}): Promise<Order> {
         await this.loadMarkets ();
-        if (type !== 'limit') {
-            throw new NotSupported (this.id + ' createOrder() supports limit orders only: fills on this venue are decided by the per-epoch sequencing auction, so a market order has no defined price — cross with a priced limit instead');
+        if (type !== 'limit' && type !== 'market') {
+            throw new NotSupported (this.id + ' createOrder() supports limit and market orders');
         }
-        if (price === undefined) {
-            throw new InvalidOrder (this.id + ' createOrder() requires a price (sats-per-USD native; pass BTC-per-USD unified)');
+        if (type === 'limit' && price === undefined) {
+            throw new InvalidOrder (this.id + ' limit createOrder() requires a price (sats-per-USD native; pass BTC-per-USD unified)');
+        }
+        if (type === 'market' && price !== undefined) {
+            throw new InvalidOrder (this.id + ' market createOrder() omits price');
         }
         const market = this.market (symbol);
         const address = this.tradingAddress ();
@@ -722,7 +727,7 @@ export default class sidepit extends Exchange {
         }
         const sideInt = (side === 'buy') ? 1 : -1;
         const amountInt = this.parseToInt (this.amountToPrecision (symbol, amount));
-        const priceSats = this.priceToSats (symbol, price);
+        const priceSats = (type === 'market') ? 0 : this.priceToSats (symbol, price);
         const traderId = this.safeString (this.options, 'traderId');
         const tsNs = this.nonceNs ();
         const newOrder = this.serializeNewOrder (sideInt, amountInt, priceSats, market['id']);
@@ -733,9 +738,10 @@ export default class sidepit extends Exchange {
         return this.safeOrder ({
             'id': orderid,
             'symbol': market['symbol'],
-            'type': 'limit',
+            'type': type,
+            'timeInForce': (type === 'market') ? 'IOC' : undefined,
             'side': side,
-            'price': price,
+            'price': (type === 'market') ? undefined : price,
             'amount': amountInt,
             'status': 'open', // optimistic: resolves at the NEXT epoch; confirm observationally
             'timestamp': this.milliseconds (),
