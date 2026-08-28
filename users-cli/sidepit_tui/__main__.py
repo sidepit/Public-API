@@ -1,13 +1,18 @@
-"""`python -m sidepit_tui` — run the cockpit. SIDEPIT_HOST overrides the venue.
+"""`sidepit` — run the cockpit.  (`python -m sidepit_tui` does the same.)
 
-Key management without the UI (flat files in ~/.sidepit/keys/, one 0600 env
-file per identity — see sidepit_trader/keystore.py):
+    sidepit                      # the cockpit
+    sidepit doggie               # open straight into the wallet view
 
-    python -m sidepit_tui import [name]   # paste a WIF (hidden), save + activate
-    python -m sidepit_tui watch <bc1q…>   # add a watch-only identity
-    python -m sidepit_tui list            # identities (no secrets printed)
-    python -m sidepit_tui use <name>      # switch the active identity
-    python -m sidepit_tui doggie          # open straight into the wallet view
+Wallets, without the UI (flat files in ~/.sidepit/keys/, one 0600 env file
+per wallet — see sidepit_trader/keystore.py):
+
+    sidepit new [name]           # create a NEW wallet — shows 12 words ONCE
+    sidepit import [name]        # paste 12 words or a WIF (hidden input)
+    sidepit watch <bc1q…>        # add a watch-only wallet
+    sidepit list                 # your wallets (no secrets printed)
+    sidepit use <name>           # switch the active wallet
+
+Keys are never deleted by this app, by design.
 """
 import sys
 
@@ -17,6 +22,42 @@ def _cli(argv: list[str]) -> int:
     cmd = argv[0]
     if cmd in ("-h", "--help", "help"):
         print(__doc__)
+        return 0
+    if cmd in ("new", "create"):
+        import os
+        from sidepit_trader import mnemonic
+        # Seed words on stdout end up in scrollback, tmux buffers, screen
+        # shares, CI logs, `script` recordings and AI-agent transcripts. So:
+        # never emit them to anything but a real terminal a human is watching.
+        if not (sys.stdout.isatty() and sys.stdin.isatty()):
+            print("sidepit new: refusing to print seed words to a pipe, file "
+                  "or non-interactive session.\nRun it in a terminal you are "
+                  "sitting at — never inside an agent session, a script, or "
+                  "with output redirected.", file=sys.stderr)
+            return 2
+        print("\nThis prints 12 secret words that ARE the wallet.")
+        print("Anyone who reads them owns the money — check nobody is watching,")
+        print("nothing is recording, and this window is not being shared.")
+        if input("Type SHOW to continue: ").strip() != "SHOW":
+            print("cancelled — nothing created.")
+            return 1
+        name = argv[1] if len(argv) > 1 else "trader"
+        words, ident = mnemonic.new_identity_words()   # 128-bit CSPRNG entropy
+        p = keystore.save_identity(name, ident.sidepit_id, ident.wif,
+                                   active=False, mnemonic=words)
+        w = words.split()
+        print("\nNEW WALLET — write these 12 words down NOW.")
+        print("They restore it here or in any standard Bitcoin wallet")
+        print("(BIP39/84). There is no other recovery.\n")
+        for r in range(3):                              # 3 rows of 4, readable
+            print("   " + "   ".join(f"{i + 1:>2}. {w[i]:<10}"
+                                     for i in range(r * 4, r * 4 + 4)))
+        print(f"\n  address : {ident.sidepit_id}")
+        print(f"  saved   : {p}  (0600)")
+        input("\nPress Enter once they are written down — the screen clears. ")
+        os.system("clear" if os.name != "nt" else "cls")
+        print(f"wallet '{name}' created · {ident.sidepit_id}")
+        print(f"make it active: sidepit use {name}\n")
         return 0
     if cmd == "import":
         import getpass
