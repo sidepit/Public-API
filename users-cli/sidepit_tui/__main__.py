@@ -12,6 +12,11 @@ per wallet — see sidepit_trader/keystore.py):
     sidepit list                 # your wallets (no secrets printed)
     sidepit use <name>           # switch the active wallet
 
+Debugging, keyless (reads the public 12125 door, prints the raw reply):
+
+    sidepit positions [bc1q…]    # dump the POSITIONS reply for an account
+                                 # (default: the active wallet)
+
 Keys are never deleted by this app, by design.
 """
 import sys
@@ -90,6 +95,27 @@ def _cli(argv: list[str]) -> int:
             mark = "*" if i["active"] else " "
             kind = "key" if i["has_key"] else "watch-only"
             print(f"{mark} {i['name']:<16} {i['sidepit_id']}  ({kind})")
+        return 0
+    if cmd == "positions":
+        # Raw dump of the account's POSITIONS reply — the exchange's own words,
+        # nothing projected. Keyless: the 12125 door serves any address.
+        from google.protobuf import text_format
+        from sidepit_trader import config
+        from sidepit_trader.reqrep import RequestClient
+        address = argv[1] if len(argv) > 1 else None
+        if address is None:
+            ident = keystore.active_identity() or {}
+            address = ident.get("sidepit_id") or ident.get("SIDEPIT_ID")
+        if not address or not address.startswith("bc1"):
+            print("usage: sidepit positions [bc1q…]   (no active wallet to default to)")
+            return 2
+        rc = RequestClient(config.HOST)
+        try:
+            tpo = rc.positions(address)
+        finally:
+            rc.close()
+        print(f"# POSITIONS {address} via {config.HOST}:12125 — raw reply, protobuf text format")
+        print(text_format.MessageToString(tpo))
         return 0
     if cmd == "use":
         if len(argv) < 2:

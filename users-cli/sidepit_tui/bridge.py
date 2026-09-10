@@ -64,6 +64,9 @@ class Snap:
     contract_usd: int = 500            # Contract.unit_size ($ per contract)
     tick_size_sats: int = 1            # Contract.tic_min
     tick_value_sats: int = 0           # Contract.tic_value
+    maint_margin_sats: int = 0         # Contract.maint_margin — intraday margin per contract
+    initial_margin_sats: int = 0       # Contract.initial_margin — charged on NEW positions at the close
+    margin_reject_at: float = 0.0      # last RC_MARGIN rejection of ours (wall clock)
     depth_bids: list = field(default_factory=list)   # [(price, size)] best-first
     depth_asks: list = field(default_factory=list)
     # identity
@@ -232,6 +235,8 @@ class Bridge(threading.Thread):
             s.contract_usd = c.unit_size
             s.tick_size_sats = c.tic_min or 1
             s.tick_value_sats = c.tic_value
+            s.maint_margin_sats = int(c.maint_margin)
+            s.initial_margin_sats = int(c.initial_margin)
         if prev != "?" and prev != s.state:
             self.on_event("info", f"exchange {prev} → {s.state}")
         try:
@@ -362,6 +367,8 @@ class Bridge(threading.Thread):
                     continue
                 code = RejectionFeed.code_name(rj)
                 kind = "error" if RejectionFeed.is_error(rj) else "info"
+                if code == "RC_MARGIN":
+                    self.snap.margin_reject_at = time.time()
                 self.on_event(kind, f"rejected {code}: "
                               f"{rj.transaction.sidepit_id}:{rj.transaction.timestamp}")
         except Exception:
@@ -389,8 +396,8 @@ class Bridge(threading.Thread):
                 s = self.snap
                 oid = self._submitter().market_order(side, size, s.ticker)
                 self.on_event("success",
-                              f"IOC MKT {('BUY' if side > 0 else 'SELL')} {size} → "
-                              f"{oid[-18:]} · unfilled remainder cancels next DLOB auction")
+                              f"MARKET {('BUY' if side > 0 else 'SELL')} {size} → "
+                              f"{oid[-18:]} · fills what it can in the next auction, the rest cancels")
                 self._last["account"] = 0.0
             elif verb == "cancel_all":
                 n = 0
