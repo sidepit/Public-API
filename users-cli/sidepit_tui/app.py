@@ -589,7 +589,7 @@ class SidepitApp(App):
         if not s.delegates:
             dlines.append(f"[{DIM}]no delegates — mint one on the delegates tab[/]")
         self._q("#session", Static).update("\n".join(dlines))
-        # working orders (right panel, authoritative sync; right-click cancels)
+        # working orders (right panel, engine orderfills; right-click cancels)
         wt = self._q("#working", WorkingOrders)
         rows = [(o["orderid"], o["side"], str(o["remaining"]), str(o["price"]),
                  "…" + o["orderid"][-13:]) for o in s.open_orders[:12]]

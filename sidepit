@@ -6,6 +6,7 @@
 #   sidepit import        add an existing key (12 words or WIF)
 #   sidepit list          list your wallets
 #   sidepit use <name>    switch the active wallet
+#   sidepit positions     dump the raw POSITIONS reply (debugging, keyless)
 #
 # Resolves its own location, so it works from any directory and through a
 # symlink on your PATH.
@@ -26,7 +27,7 @@ if [ ! -x "$PY" ]; then
 fi
 
 if [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  sed -n '3,8p' "$src" | sed 's/^# \?//'
+  sed -n '3,9p' "$src" | sed 's/^# \?//'
   exit 0
 fi
 

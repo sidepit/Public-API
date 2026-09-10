@@ -22,7 +22,43 @@ sidepit                  # cockpit: book, positions, plain-english prompt
 sidepit doggie           # wallet view: your wealth as one number, two buttons
 sidepit list             # your wallets     sidepit use <name>   switch wallet
 sidepit import           # add a key (12 words or WIF, hidden input)
+sidepit positions [addr] # debugging: dump the raw POSITIONS reply, keyless
 ```
+
+### Running the TUI from a local checkout (lower level)
+
+`sidepit` is a launcher: it runs `python -m sidepit_tui` from `users-cli/` with the
+repo's own environment at `python-client/.venv`. If you want the pieces:
+
+- **Python 3.10+.**
+- **One venv for SDK + TUI** — `install_sidepit` creates `python-client/.venv` and
+  installs three things into it. To do it by hand (or into a venv you made yourself):
+
+  ```sh
+  python3 -m venv python-client/.venv
+  source python-client/.venv/bin/activate
+  pip install -r python-client/requirements.txt    # the SDK: protobuf, pynng, secp256k1, …
+  pip install -r users-cli/requirements.txt        # the TUI: textual, qrcode
+  pip install -e .                                 # from the repo root: makes `sidepit_tui`
+                                                   # and `sidepit_trader` importable anywhere
+  ```
+
+- **Run it** with that venv active, from any directory:
+
+  ```sh
+  source python-client/.venv/bin/activate
+  python -m sidepit_tui            # the cockpit (same as `sidepit`)
+  python -m sidepit_tui list       # wallet subcommands work the same way
+  ```
+
+  Without the `pip install -e .` step, run from `users-cli/` so the package is on the path.
+
+- **If you see `ModuleNotFoundError: No module named 'textual'`**, the wrong Python is
+  running — the system interpreter, or a venv without `users-cli/requirements.txt`.
+  Activate `python-client/.venv` (or install the TUI requirements into your venv).
+
+The published `pip install sidepit` package is a separate, versioned copy of this code;
+a local checkout does not update it and it does not update the checkout.
 
 ## First run — your identity
 

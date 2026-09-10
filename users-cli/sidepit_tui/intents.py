@@ -63,7 +63,7 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
     if t in ("go flat", "go flat and exit", "flatten", "flatten all", "exit all"):
         return Intent("FLATTEN_ALL",
                       "parsed → FLATTEN_ALL · cancel all working orders, then send "
-                      "IOC market closes for every position")
+                      "market orders to close every position")
     if t in ("cancel all", "cancel all working orders", "cancel everything"):
         return Intent("CANCEL_ALL", "parsed → CANCEL_ALL · cancel all working orders")
     if t in ("risk", "what's my risk", "whats my risk", "what's my risk in btc terms",
@@ -90,7 +90,7 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
             raise ValueError("size must be positive")
         return Intent("MKT",
                       f"parsed → MKT {'BUY' if side > 0 else 'SELL'} {size} · "
-                      f"native IOC: fill available liquidity, cancel every remainder · "
+                      f"market order: fills whatever is available in the next auction; anything unfilled cancels · "
                       f"routing to the next DLOB auction",
                       side=side, size=size)
     m = _CXL.match(t)

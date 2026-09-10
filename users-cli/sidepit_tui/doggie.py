@@ -8,13 +8,14 @@ Deliberately separate visual identity (orange/green on navy, big tactile
 buttons); do not blend with the cockpit's hacker-green.
 
 It is a SKIN over the same client core: same Bridge, same Snap, same
-native IOC `market` command the cockpit prompt uses — proof the architecture
+native `market` command the cockpit prompt uses — proof the architecture
 supports "cockpit view" and "doggie view" as two faces of one client (the
 handoff's stated test of doing it right).
 
 Sizing honesty (the concept note's $10k unit is not decided product): here one
 tap = ONE contract (= $`Contract.unit_size`, currently $500) via a native
-immediate-or-cancel market order in the next DLOB deterministic auction. Mapping
+market order (price 0 on the wire: fills what it can in the next DLOB
+deterministic auction, the rest cancels). Mapping
 on the inverse forward: account equity starts 100% BTC (it IS bitcoin margin);
 being LONG p contracts of USDBTC = holding $p×size synthetically = hedged; p
 past your whole equity = net SHORT bitcoin; p negative = LEVERAGED long. Fully
@@ -37,6 +38,33 @@ INK = "#dfe9f3"
 MUT = "#7d93ab"
 
 
+def meter(s, now: float | None = None) -> dict:
+    """The doggie meter, as numbers (Jay's rule, 2026-09-10).
+
+    Intraday the engine charges MAINTENANCE margin per contract of net position,
+    so `available_margin // maint_margin` is how many more contracts you can add
+    in the direction you already lean. Going the other way you first unwind, so
+    the reachable extreme on either side is  n_max = room + |position|:
+    long 1 with room 2 -> 2 more the same way, 2+1+1 the other way.
+    The line has 2*n_max+1 points, dot = position, 0 in the middle. Wealth is
+    available_balance + realized (+ a local unrealized while open, which does
+    not enter margin). Labels describe NET bitcoin exposure, which includes the
+    bitcoin you hold, so the two ends are not mirror images in dollars.
+    """
+    import time as _time
+    now = _time.time() if now is None else now
+    pos = sum(p["contracts"] for p in s.positions)
+    maint = s.maint_margin_sats
+    room = max(0, s.available_margin) // maint if maint > 0 else 0
+    n_max = room + abs(pos)
+    points = 2 * n_max + 1
+    index = n_max - pos                      # +n_max (short bitcoin) sits at the LEFT end
+    at_max = maint > 0 and room == 0 and pos != 0
+    exchange_said_no = (now - s.margin_reject_at) < 8.0 if s.margin_reject_at else False
+    return {"pos": pos, "n_max": n_max, "room": room, "points": points, "index": index,
+            "taps_left": room, "at_max": at_max or exchange_said_no,
+            "exchange_said_no": exchange_said_no, "known": maint > 0}
+
 class DoggieScreen(Screen):
     """ctrl+d toggles back to the cockpit. Reads app.snap on a timer; taps go
     through the same bridge `market` command as the cockpit prompt."""
@@ -50,9 +78,9 @@ class DoggieScreen(Screen):
                   border: round {MUT}; padding: 1 4; }}
     #dog-title {{ text-align: center; color: {MUT}; height: 1; }}
     #dog-value {{ width: 1fr; color: {INK}; }}
-    #dog-sub {{ text-align: center; color: {MUT}; height: 1; }}
-    #dog-stance {{ text-align: center; height: 2; text-style: bold; }}
-    #dog-meter {{ text-align: center; height: 2; }}
+    #dog-sub {{ text-align: center; color: {MUT}; height: 1; margin-top: 1; }}
+    #dog-stance {{ text-align: center; height: 1; margin-top: 1; text-style: bold; }}
+    #dog-meter {{ text-align: center; height: 1; margin: 1 0; }}
     #dog-buttons {{ height: 7; align: center middle; }}
     #tap-btc {{ width: 1fr; height: 7; background: {ORANGE}; color: {NAVY};
                 text-style: bold; border: round {ORANGE}; margin: 0 1; }}
@@ -64,7 +92,7 @@ class DoggieScreen(Screen):
 
     def compose(self) -> ComposeResult:
         with Vertical(id="dog-frame"):
-            yield Static("doggie // wallet · native IOC · ctrl+d = cockpit",
+            yield Static("doggie // wallet · ctrl+d = cockpit",
                          id="dog-title")
             yield Digits("0.00", id="dog-value")
             yield Static("", id="dog-sub")
@@ -109,28 +137,38 @@ class DoggieScreen(Screen):
         # p=0 still reads LONG — you're long the bitcoin you hold.
         net_usd = eq_usd - hedged_usd
         net_btc = net_usd * s.last / 1e8 if s.last else 0.0
+        m = meter(s)
         if pos != 0 and net_usd > eq_usd + 0.5:
             side, color = "LEVERAGED LONG", ORANGE   # exposure beyond your equity
+        elif pos == 0:
+            side, color = "LONG", INK                # just the bitcoin you hold — no position
         elif net_usd > 0.5:
             side, color = "LONG", ORANGE
         elif net_usd < -0.5:
             side, color = "SHORT", DGREEN
         else:
             side, color = "HEDGED", DGREEN
+        if m["at_max"] and side != "HEDGED":
+            side = "MAX " + side
         btc_str = f"{abs(net_btc):.3f}".lstrip("0") or "0"
         stance = (f"{side} {btc_str} BITCOIN · ${abs(net_usd):,.0f}"
-                  if side != "HEDGED" else "HEDGED · value frozen in USD")
+                  if not side.endswith("HEDGED") else "HEDGED · value frozen in USD")
         self.query_one("#dog-stance", Static).update(
             f"[{MUT}]position({pos})[/]  [{color}]{stance}[/]")
-        frac = 1.0 - (hedged_usd / eq_usd) if eq_usd else 1.0
-        width = 40
-        marker = max(0, min(width - 1, int((frac + 0.5) / 2.0 * width)))
-        bar = "".join("●" if i == marker else "─" for i in range(width))
-        self.query_one("#dog-meter", Static).update(
-            f"[{MUT}]short[/] [{color}]{bar}[/] [{MUT}]levered[/]")
+        # The line: one point per contract you could hold, dot = where you are.
+        if m["known"]:
+            points = m["points"]
+            index = max(0, min(points - 1, m["index"]))
+            step = 5 if points <= 9 else 2 if points <= 21 else 1
+            bar = "".join("●" if i == index else "─" * step for i in range(points))
+            self.query_one("#dog-meter", Static).update(
+                f"[{MUT}]dollars[/] [{color}]{bar}[/] [{MUT}]bitcoin[/]")
+        else:
+            self.query_one("#dog-meter", Static).update(
+                f"[{MUT}]dollars ─── margin unknown ─── bitcoin[/]")
         self.query_one("#dog-foot", Static).update(
-            f"[{MUT}]one tap = ${s.contract_usd} (1 contract) · IOC in the next "
-            f"DLOB auction[/]")
+            f"[{MUT}]one tap = 1 contract = ${s.contract_usd} more bitcoin or "
+            f"${s.contract_usd} more USD[/]")
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
         b = self.app.bridge
@@ -143,8 +181,8 @@ class DoggieScreen(Screen):
         if event.button.id == "tap-usd":
             # toward dollars: hedge $unit more = BUY one USDBTC contract
             b.cmd("market", 1, 1)
-            self.app.add_event("ok", f"doggie IOC requested → USD (+${s.contract_usd})")
+            self.app.add_event("ok", f"${s.contract_usd} more USD at market price · fills in the next auction")
         elif event.button.id == "tap-btc":
             # toward bitcoin: unwind $unit of hedge = SELL one contract
             b.cmd("market", -1, 1)
-            self.app.add_event("ok", f"doggie IOC requested → BTC (−${s.contract_usd})")
+            self.app.add_event("ok", f"${s.contract_usd} more bitcoin at market price · fills in the next auction")
