@@ -7,10 +7,15 @@ reads immutable `Snap` snapshots the bridge posts, and enqueues commands
 
 Cadences (human terminal, not a bot):
   - exchange state + quote        every ~1.5s (12125 reqrep)
-  - account (positions/margin)    every ~3s when an address is set
-  - open-order snapshot sync      every ~10s while OPEN (12129, authoritative)
+  - account (positions/margin/    every ~3s when an address is set —
+    open orders via orderfills)   the per-account door is the ONLY poll
   - rejections feed               drained every loop (12128, ours only)
   - on-chain balance (esplora)    every ~60s and on demand
+
+The TUI never touches the 12129 snapshot stream: triggering SNAPSHOT makes the
+engine broadcast the ENTIRE order book, which is a market-data reconstruction
+tool, not a per-account refresh. Open orders are the POSITIONS reply's
+orderfills (engine-authoritative remaining/filled per order).
 
 Connections stay healthy on their own: the REQ socket is reopened on Timeout
 and retried once; the Submitter keeps its push connection fresh across idle
@@ -32,11 +37,9 @@ from sidepit_trader.reqrep import (RequestClient, project_account_requests,
                                    project_unlock_records)
 from sidepit_trader.signer import Signer
 from sidepit_trader.submit import Submitter
-from sidepit_trader.sync import snapshot_sync
 
 QUOTE_SECS = 1.5
 ACCOUNT_SECS = 3.0
-SYNC_SECS = 10.0
 CHAIN_SECS = 60.0
 
 
@@ -79,7 +82,7 @@ class Snap:
     realized_fees: int = 0
     positions: list = field(default_factory=list)    # dicts, gateway-shaped
     orders: list = field(default_factory=list)       # today's orders (orderfills)
-    open_orders: list = field(default_factory=list)  # authoritative (snapshot sync)
+    open_orders: list = field(default_factory=list)  # remaining>0 subset of orders
     delegates: list = field(default_factory=list)    # settled truth (delegate_data)
     account_requests: list = field(default_factory=list)  # receipts, keyed by oid
     unlock_records: list = field(default_factory=list)    # unlock lifecycle rows
@@ -115,7 +118,7 @@ class Bridge(threading.Thread):
         self._sub: Submitter | None = None
         self._rejects: RejectionFeed | None = None
         self._halt = threading.Event()
-        self._last = {"quote": 0.0, "account": 0.0, "sync": 0.0, "chain": 0.0}
+        self._last = {"quote": 0.0, "account": 0.0, "chain": 0.0}
 
     # --- identity (called from UI thread BEFORE start(), or via command) ----
     def set_identity(self, address: str, wif: str | None) -> None:
@@ -202,11 +205,6 @@ class Bridge(threading.Thread):
         if self.snap.address and now - self._last["account"] >= ACCOUNT_SECS:
             self._last["account"] = now
             self._poll_account()
-            dirty = True
-        if (self.snap.address and self.snap.is_open
-                and now - self._last["sync"] >= SYNC_SECS):
-            self._last["sync"] = now
-            self._poll_open_orders()
             dirty = True
         if self.snap.address and now - self._last["chain"] >= CHAIN_SECS:
             self._last["chain"] = now
@@ -311,6 +309,15 @@ class Bridge(threading.Thread):
                 "ns": int(oid.rsplit(":", 1)[-1] or 0)})
         orders.sort(key=lambda o: -o["ns"])
         s.orders = orders
+        # Open orders are the remaining>0 subset of the same engine-served
+        # orderfills — never a 12129 whole-book snapshot (that broadcast is a
+        # market-data tool; a per-account view must not trigger it).
+        s.open_orders = [{
+            "orderid": o["orderid"], "ticker": o["ticker"], "side": o["side"],
+            "price": o["price"], "remaining": o["remaining"],
+            "filled": o["filled"]}
+            for o in sorted(orders, key=lambda o: o["orderid"])
+            if o["remaining"] > 0]
         # Contract projection (no client-side state machine): receipts are
         # history (is_pending=True = received/displayed, NOT active; terminal
         # lands on the SAME oid — reject_code decides applied vs rejected).
@@ -335,19 +342,6 @@ class Bridge(threading.Thread):
             delegs.append({"trader_id": agent, "status": "DELEGATE_NONE",
                            "is_active": False, "updatetime": 0, "pending": True})
         s.delegates = delegs
-
-    def _poll_open_orders(self) -> None:
-        try:
-            orders, _epoch = snapshot_sync(self.host, self.snap.address,
-                                           timeout_ms=5000)
-        except pynng.Timeout:
-            return   # closed / no worker — keep the last view
-        self.snap.open_orders = [{
-            "orderid": oid, "ticker": bo.ticker,
-            "side": "buy" if bo.side > 0 else "sell",
-            "price": bo.price, "remaining": bo.remaining_qty,
-            "filled": bo.filled_qty}
-            for oid, bo in sorted(orders.items())]
 
     def _poll_chain(self) -> None:
         try:
@@ -384,12 +378,12 @@ class Bridge(threading.Thread):
                               f"order submitted {('BUY' if side > 0 else 'SELL')} "
                               f"{size} @ {price} → {oid[-18:]} "
                               f"(resolves next epoch — watch Open Orders)")
-                self._last["sync"] = 0.0   # re-sync soon
+                self._last["account"] = 0.0   # refresh orders soon
             elif verb == "cancel":
                 _, oid = parts
                 self._submitter().cancel(oid)
                 self.on_event("success", f"cancel submitted for …{oid[-18:]}")
-                self._last["sync"] = 0.0
+                self._last["account"] = 0.0
             elif verb == "market":
                 _, side, size = parts
                 s = self.snap
@@ -397,14 +391,14 @@ class Bridge(threading.Thread):
                 self.on_event("success",
                               f"IOC MKT {('BUY' if side > 0 else 'SELL')} {size} → "
                               f"{oid[-18:]} · unfilled remainder cancels next DLOB auction")
-                self._last["sync"] = 0.0
+                self._last["account"] = 0.0
             elif verb == "cancel_all":
                 n = 0
                 for o in list(self.snap.open_orders):
                     self._submitter().cancel(o["orderid"])
                     n += 1
                 self.on_event("success", f"cancel submitted for {n} open order(s)")
-                self._last["sync"] = 0.0
+                self._last["account"] = 0.0
             elif verb == "flatten":
                 sub = self._submitter()
                 s = self.snap
@@ -420,7 +414,6 @@ class Bridge(threading.Thread):
                 self.on_event("success",
                               f"FLATTEN_ALL submitted · {len(s.open_orders)} cancel(s), "
                               f"{closed} closing order(s) · verify next epoch")
-                self._last["sync"] = 0.0
                 self._last["account"] = 0.0
             elif verb == "unlock":
                 _, amount = parts
@@ -502,7 +495,6 @@ class Bridge(threading.Thread):
             elif verb == "chain_refresh":
                 self._last["chain"] = 0.0
             elif verb == "sync_now":
-                self._last["sync"] = 0.0
                 self._last["account"] = 0.0
         except Exception as e:
             self.on_event("error", f"{verb}: {e}")
