@@ -1,6 +1,9 @@
 # Sidepit distribution record
 
-Status: **v0.1.0 is live on PyPI** as `sidepit`.
+Status: **v0.1.0 is live on PyPI** as `sidepit`. **v0.1.1 is the release
+candidate**: the cockpit TUI no longer triggers whole-order-book snapshot
+broadcasts (12129) to refresh its open-orders view; open orders come from the
+account's POSITIONS reply. No SDK API changes.
 
 This file records the distribution decisions made for the public client. It is
 the durable boundary between what works today and what is deliberately next.
