@@ -154,7 +154,12 @@ class Trader:
         """Read estate + session + active contract + close time via reqrep. Drives the
         open/close hooks (the taker has no clock feed, so state is polled)."""
         try:
-            ap = self.req.active_product(self.ticker or None)
+            # Ask for THE active product, never for our current ticker: once a contract
+            # expires, ACTIVE_PRODUCT for that ticker comes back EMPTY (no product, no
+            # schedule, no state) — verified 2026-09-23 with the June USDBTCM26 — so a
+            # bot polling its own ticker would never see the roll and would go dark at
+            # the first open after expiry. The exchange decides what is active; we follow.
+            ap = self.req.active_product()
             es = ap.exchange_status
             self.state = es.status.estate
             self.session_id = es.session.session_id or es.status.session_id or self.session_id
