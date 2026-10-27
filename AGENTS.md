@@ -3,6 +3,9 @@
 **The contract lives in [`Public-API-Data`](Public-API-Data/)** — its README has
 the basic facts and every port; `sidepit_api.proto` is every message, exactly as
 production speaks it. This file adds the working recipes and trading facts.
+The user docs are machine-readable: fetch <https://docs.sidepit.com/llms.txt>
+for the index and the linked Markdown pages (any page URL plus `.md`), or
+<https://docs.sidepit.com/llms-full.txt> for all of it. Do not scrape the HTML.
 
 Sidepit is a Bitcoin-margined forwards exchange — you are using Bitcoin to
 trade USD. Orders match in one-second deterministic auctions (DLOB): the best
