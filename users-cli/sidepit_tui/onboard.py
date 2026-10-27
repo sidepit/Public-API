@@ -10,15 +10,11 @@ so onboarding here IS provisioning for an agent):
            env file into ~/.sidepit/keys/).
   watch    just an address — read-only everywhere (verbs disabled).
 
-Legacy `~/.spwallets/.spwallet*` files (bare WIF, one per file) are detected
-and offered for import so existing users keep their accounts. SIDEPIT_WIF /
-SIDEPIT_ID in the environment override everything (bot-style).
+SIDEPIT_WIF / SIDEPIT_ID in the environment override everything (bot-style).
 """
 from __future__ import annotations
 
 import os
-from pathlib import Path
-
 from textual.app import ComposeResult
 from textual.containers import Grid, Horizontal
 from textual.coordinate import Coordinate
@@ -27,22 +23,6 @@ from textual.widgets import Button, DataTable, Input, Label, Static
 
 from sidepit_trader import keystore, wallet
 
-LEGACY_DIR = Path.home() / ".spwallets"
-
-
-def _legacy_wifs() -> list[tuple[str, str]]:
-    """[(name, wif)] from the old users-cli wallet folder, if any."""
-    out = []
-    if LEGACY_DIR.is_dir():
-        for p in sorted(LEGACY_DIR.iterdir()):
-            if p.is_file():
-                try:
-                    wif = p.read_text().strip()
-                    wallet.from_wif(wif)   # validates checksum
-                    out.append((p.name, wif))
-                except Exception:
-                    continue
-    return out
 
 
 def load_or_onboard(app) -> None:
@@ -56,20 +36,27 @@ def load_or_onboard(app) -> None:
 
 
 class OnboardScreen(ModalScreen[None]):
-    """Modal over the (empty) app until an identity exists."""
+    """Modal over the app until an identity is chosen. Escape backs out: to the
+    cockpit as-is when a session already exists (reached via ctrl+a → add
+    identity), or to a no-identity cockpit on first run."""
+
+    BINDINGS = [("escape", "cancel", "back")]
+
+    def action_cancel(self) -> None:
+        self.dismiss(None)
+        if self.app.bridge is None:
+            self.app.add_event("sys", "no identity chosen — ctrl+a to add one "
+                                      "later; the market is visible read-only")
 
     def compose(self) -> ComposeResult:
-        legacy = _legacy_wifs()
         with Grid(id="onboard-grid"):
-            yield Label("[b]Welcome to Sidepit[/b] — choose an identity",
+            yield Label("[b]Welcome to Sidepit[/b] — choose an identity "
+                        "[dim](esc = back)[/dim]",
                         id="onboard-title")
             yield Button("Create a new identity (12-word backup)",
                          variant="primary", id="ob-create")
             yield Button("Import — 12 words or WIF", id="ob-import")
             yield Button("Watch an address (read-only)", id="ob-watch")
-            if legacy:
-                yield Button(f"Import legacy wallet ({legacy[0][0]})",
-                             variant="warning", id="ob-legacy")
             yield Input(placeholder="paste 12 words, WIF, or bc1q… address here",
                         id="ob-input", password=True)
             yield Static("", id="ob-msg")
@@ -130,10 +117,6 @@ class OnboardScreen(ModalScreen[None]):
                 self._msg("[red]paste a bc1q… address in the box first[/red]")
                 return
             self._finish("watch", raw, None)
-        elif event.button.id == "ob-legacy":
-            name, wif = _legacy_wifs()[0]
-            ident = wallet.from_wif(wif)
-            self._finish(name, ident.sidepit_id, ident.wif)
 
 
 class AccountsScreen(ModalScreen[None]):
