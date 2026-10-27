@@ -21,6 +21,7 @@ def snap(pos: int, margin_reject_at: float = 0.0) -> Snap:
     s = Snap(maint_margin_sats=MAINT, initial_margin_sats=INITIAL,
              available_margin=EQUITY - held, available_balance=EQUITY,
              contract_usd=500, last=1293, is_open=True, state="EXCHANGE_OPEN",
+             ticker="USDBTCU26",
              margin_reject_at=margin_reject_at)
     if pos:
         s.positions = [{"ticker": "USDBTCU26", "contracts": pos, "margin_required": held,
@@ -63,3 +64,12 @@ def test_unknown_margin_spec_degrades_honestly():
     s = snap(0); s.maint_margin_sats = 0
     m = meter(s, now=1000.0)
     assert not m["known"] and m["n_max"] == 0
+
+
+def test_wallet_is_one_symbol_other_expiries_ignored():
+    s = snap(-1)
+    s.positions.append({"ticker": "USDBTCZ26", "contracts": +1, "margin_required": MAINT,
+                        "entry_price": 1300, "side": "long", "realized_pnl": 0,
+                        "reduce_only": False, "open_bids": 0, "open_asks": 0})
+    m = meter(s, now=1000.0)
+    assert m["pos"] == -1          # not netted to 0 against the other expiry
