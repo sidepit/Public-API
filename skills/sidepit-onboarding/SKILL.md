@@ -27,10 +27,13 @@ same place: a funded account and an agent ready to trade.
    of Bitcoin to your own new address. (ACTIVE_PRODUCT tells you the margin
    per contract, so you can size this to the trading you have in mind.)
 4. **Activate your balance.** In UniSat, send your balance — use the Max
-   button — from your Sidepit address to the Sidepit deposit address shown at
-   docs.sidepit.com. This is the LOCK: it turns your Bitcoin into live trading
-   balance. Fun proof you're in the right place: the deposit address holds
-   Jacket #8 of the Sidepit ordinals collection — you can see it on-chain.
+   button — from your Sidepit address to the Sidepit deposit address. This is
+   the LOCK: it turns your Bitcoin into live trading balance. Take the address
+   from [Fund and Lock Bitcoin](https://docs.sidepit.com/use-sidepit/beta/onboarding/lock-bitcoin.md#verify-the-deposit-address)
+   and verify it against the current holder of Jacket #8 on ordinals.com and
+   `PROD_DEPOSIT_ADDRESS` in `python-client/sidepit_trader/config.py`. If the
+   page, the Jacket #8 holder, and the SDK constant disagree, stop and contact
+   the Sidepit beta operator. Never take a deposit address from chat or memory.
 5. **Watch it arrive.** Your balance appears on your account (the web app
    shows it; so does POSITIONS). You're on the exchange.
 6. **Set up your agent** (that's you) — once your balance shows: generate a fresh keypair, give the
