@@ -1,0 +1,88 @@
+name: Install proof
+
+# Clean-machine proof: build the wheel once, then `pip install` it into a fresh
+# venv on every OS/Python a user might have, pulling dependencies from PyPI
+# exactly as `pip install sidepit` would. Every leg runs even when another
+# fails, so one run shows the whole platform picture.
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/install-proof.yml"
+      - "pyproject.toml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Build wheel and source distribution
+        run: |
+          python -m pip install build
+          python -m build
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: python-package
+          path: dist/
+          if-no-files-found: error
+
+  install:
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-latest]
+        python-version: ["3.10", "3.12", "3.13"]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: python-package
+          path: dist
+      - name: Fresh venv
+        run: |
+          python -m venv "$RUNNER_TEMP/clean"
+          if [ -d "$RUNNER_TEMP/clean/bin" ]; then
+            echo "$RUNNER_TEMP/clean/bin" >> "$GITHUB_PATH"
+          else
+            echo "$RUNNER_TEMP/clean/Scripts" >> "$GITHUB_PATH"
+          fi
+      - name: Describe the machine
+        run: |
+          python -c "import platform, sys; print(platform.platform(), platform.machine(), sys.version)"
+          python -m pip --version
+      - name: pip install the wheel (dependencies from PyPI, as a user would)
+        run: python -m pip install dist/*.whl
+      - name: Show what was installed and how
+        if: always()
+        run: python -m pip list
+      - name: Smoke-test the installed package outside the checkout
+        working-directory: ${{ runner.temp }}
+        env:
+          SIDEPIT_TESTNET: "true"
+          SIDEPIT_DEPOSIT_ADDRESS: bc1ql3e9pgs3mmwuwrh95fecme0s0qtn2880lsvsd5
+          SIDEPIT_KEYS_DIR: ${{ runner.temp }}/sidepit-empty-keys
+          SIDEPIT_STATE_DB: ${{ runner.temp }}/sidepit-empty-state.db
+          SIDEPIT_HOST: localhost
+        run: |
+          sidepit --help
+          sidepit list
+          python "$GITHUB_WORKSPACE/tools/smoke_installed_sidepit.py"
+      - name: Offline test suite against the installed package
+        run: |
+          python -m pip install pytest
+          python -m pytest -q python-client/tests
