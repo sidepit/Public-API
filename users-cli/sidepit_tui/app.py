@@ -244,8 +244,8 @@ class SidepitApp(App):
     #prompt:focus {{ border: none; }}
     #prompt .input--placeholder {{ color: {DIM}; text-style: italic; }}
     #hint {{ height: 1; padding: 0 1; }}
-    #qty {{ width: 8; }}
-    #buy-mkt, #sell-mkt {{ min-width: 8; }}
+    #qty {{ width: 7; height: 1; margin: 0 1; }}
+    #buy-mkt, #sell-mkt {{ min-width: 8; height: 1; margin: 0 1 0 0; }}
     #prompt .input--cursor {{ background: {GREEN}; color: {BG}; }}
     #prompt .input--selection {{ background: {GREEN_DIM}; }}
     .try {{ height: 1; padding: 0; min-width: 0; border: none;
@@ -365,17 +365,17 @@ class SidepitApp(App):
                         yield Static("", id="book", classes="panel")
                         yield Static(title("activity"), id="activity-title")
                         yield RichLog(markup=True, wrap=True, id="log")
-                        yield Static(f"[{DIM}]type:  buy 1 at market · sell 2 @ 1259 · "
-                                     f"cancel all · go flat   — or ctrl+d for the one-tap wallet[/]",
+                        yield Static(f"[{DIM}]type: buy 1 at market · sell 2 @ 1259 · "
+                                     f"cancel all · go flat · ctrl+d wallet[/]",
                                      id="hint")
                         with Horizontal(id="promptrow"):
                             yield Label("trader@sidepit ›", id="promptlabel")
                             yield Input(placeholder='say what you want. plain english. '
                                                     'e.g. "go flat and exit"',
                                         id="prompt")
-                            yield Input(value="1", placeholder="qty", id="qty")
-                            yield Button("BUY", variant="success", id="buy-mkt")
-                            yield Button("SELL", variant="error", id="sell-mkt")
+                            yield Input(value="1", placeholder="qty", id="qty", compact=True)
+                            yield Button("BUY", variant="success", id="buy-mkt", compact=True)
+                            yield Button("SELL", variant="error", id="sell-mkt", compact=True)
                     with Vertical(id="right"):
                         yield Static(title("session"), classes="paneltitle")
                         yield Static("", id="session", classes="panel")

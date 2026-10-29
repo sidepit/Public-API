@@ -37,6 +37,9 @@ _MKT = re.compile(r"^(buy|sell|b|s)\s+([\d.,]+)\s*(btc)?\s+(?:at\s+)?(?:market|m
 _CXL = re.compile(r"^cancel\s+(.+)$")
 
 
+MAX_CONTRACTS = 1000   # per order; a typo should not become a position
+
+
 def _contracts(qty_raw: str, is_btc: bool, last_sats: int, contract_usd: int) -> int:
     """Integer contracts from either a contract count or a BTC notional."""
     q = float(qty_raw.replace(",", ""))
@@ -78,6 +81,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
         price = int(m.group(4).replace(",", ""))
         if size <= 0 or price <= 0:
             raise ValueError("size and price must be positive")
+        if size > MAX_CONTRACTS:
+            raise ValueError(f"max {MAX_CONTRACTS} contracts per order (asked {size})")
         return Intent("LMT",
                       f"LMT {'BUY' if side > 0 else 'SELL'} {size} @ {price} "
                       f"sats/USD · works until filled or cancelled",
@@ -88,6 +93,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
         size = _contracts(m.group(2), bool(m.group(3)), last_sats, contract_usd)
         if size <= 0:
             raise ValueError("size must be positive")
+        if size > MAX_CONTRACTS:
+            raise ValueError(f"max {MAX_CONTRACTS} contracts per order (asked {size})")
         return Intent("MKT",
                       f"MKT {'BUY' if side > 0 else 'SELL'} {size} · "
                       f"market order: fills what's there, the rest cancels",
