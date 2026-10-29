@@ -470,8 +470,11 @@ class SidepitApp(App):
                              on_event=lambda k, t: self.call_from_thread(self.add_event, k, t))
         self.bridge.set_identity(address, wif)
         self.bridge.start()
-        mode = "watch-only" if wif is None else "custody key loaded"
-        self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        if address:
+            mode = "watch-only" if wif is None else "custody key loaded"
+            self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        else:
+            self.add_event("sys", f"market only — no identity · host {self.host}")
         self.refresh_wallets()     # keep the dropdown honest after any switch
         self.add_event("sys", HELP)
         # A delegate may TRADE and cancel — never move money or change who is
