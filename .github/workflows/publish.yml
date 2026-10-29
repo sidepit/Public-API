@@ -1,5 +1,11 @@
 name: Publish Python package
 
+# Release artifacts come from CI only, never from a developer machine. A tag
+# push runs the full install proof (pure wheel + bundled platform wheels,
+# pip-installed on Linux, Windows, macOS Intel and Apple Silicon); nothing is
+# uploaded unless every leg is green. Upload goes through PyPI Trusted
+# Publishing behind the `pypi` environment approval.
+
 on:
   push:
     tags: ["v*"]
@@ -15,17 +21,13 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  check-tag:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-          cache: pip
-          cache-dependency-path: pyproject.toml
-      - name: Install build tools and test dependencies
-        run: python -m pip install . build pytest twine
       - name: Verify tag matches package version
         if: github.event_name == 'push'
         run: |
@@ -36,34 +38,14 @@ jobs:
           if tag != f"v{version}":
               raise SystemExit(f"tag {tag!r} does not match package version {version!r}")
           PY
-      - name: Test and build
-        run: |
-          python -m pytest -q python-client/tests
-          python -m build
-          python -m twine check --strict dist/*
-          python tools/check_python_dist.py dist/*
-          python -m pip install --force-reinstall --no-deps dist/*.whl
-      - name: Smoke-test release wheel outside checkout
-        working-directory: ${{ runner.temp }}
-        env:
-          SIDEPIT_TESTNET: "true"
-          SIDEPIT_DEPOSIT_ADDRESS: bc1ql3e9pgs3mmwuwrh95fecme0s0qtn2880lsvsd5
-          SIDEPIT_KEYS_DIR: ${{ runner.temp }}/sidepit-empty-keys
-          SIDEPIT_STATE_DB: ${{ runner.temp }}/sidepit-empty-state.db
-          SIDEPIT_HOST: localhost
-        run: |
-          sidepit --help
-          sidepit list
-          python "$GITHUB_WORKSPACE/tools/smoke_installed_sidepit.py"
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: python-package
-          path: dist/
-          if-no-files-found: error
+
+  proof:
+    needs: check-tag
+    uses: ./.github/workflows/install-proof.yml
 
   publish-testpypi:
     if: github.event_name == 'workflow_dispatch'
-    needs: build
+    needs: proof
     runs-on: ubuntu-latest
     environment: testpypi
     permissions:
@@ -71,15 +53,17 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: python-package
+          pattern: dist-*
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
         with:
           repository-url: https://test.pypi.org/legacy/
 
   publish-pypi:
     if: github.event_name == 'push'
-    needs: build
+    needs: proof
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -87,6 +71,8 @@ jobs:
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: python-package
+          pattern: dist-*
           path: dist
-      - uses: pypa/gh-action-pypi-publish@release/v1
+          merge-multiple: true
+      - run: ls -l dist
+      - uses: pypa/gh-action-pypi-publish@7245906fb61fa33a13554f9d5fb856fe61758086 # v1.14.3
