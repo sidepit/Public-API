@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sidepit"
-version = "0.1.1"
+version = "0.1.2"
 description = "The official Python SDK and trading terminal for Sidepit."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,15 +20,7 @@ classifiers = [
     "Programming Language :: Python :: 3 :: Only",
     "Topic :: Office/Business :: Financial :: Investment",
 ]
-dependencies = [
-    "protobuf==3.20.1",
-    "pynng",
-    "secp256k1",
-    "base58",
-    "bitcoinlib",
-    "textual>=8.0",
-    "qrcode>=7.0",
-]
+dynamic = ["dependencies"]   # see setup.py: pure vs bundled-secp256k1 builds
 
 [project.scripts]
 sidepit = "sidepit_tui.__main__:main"
@@ -37,22 +29,3 @@ sidepit = "sidepit_tui.__main__:main"
 Homepage = "https://sidepit.com"
 Documentation = "https://docs.sidepit.com"
 Source = "https://github.com/sidepit/Public-API"
-
-[tool.setuptools]
-packages = [
-    "sidepit_trader",
-    "sidepit_trader.examples",
-    "sidepit_trader.proto",
-    "sidepit_trader.data",
-    "sidepit_tui",
-]
-
-[tool.setuptools.package-dir]
-sidepit_trader = "python-client/sidepit_trader"
-"sidepit_trader.examples" = "python-client/sidepit_trader/examples"
-"sidepit_trader.proto" = "python-client/proto"
-"sidepit_trader.data" = "python-client/sidepit_trader/data"
-sidepit_tui = "users-cli/sidepit_tui"
-
-[tool.setuptools.package-data]
-sidepit_trader = ["data/*.txt"]
