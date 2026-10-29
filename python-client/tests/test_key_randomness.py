@@ -57,15 +57,15 @@ def test_entropy_source_cannot_be_swapped_for_a_weaker_one():
                            re.M)
     for pkg in SHIPPED:
         for path in pkg.rglob("*.py"):
-            src = path.read_text()
+            src = path.read_text(encoding="utf-8")
             assert not forbidden.search(src), f"{path}: forbidden entropy source"
             assert "os.urandom(" not in src, f"{path}: use secrets.token_bytes, not os.urandom"
             # signing stays RFC 6979: no caller may hand libsecp256k1 or bitcoinlib its own nonce
             assert "custom_nonce" not in src, f"{path}: custom nonce forbidden"
             assert "use_rfc6979=False" not in src, f"{path}: RFC 6979 must stay on"
-    gen_src = (SHIPPED[0] / "wallet.py").read_text()
+    gen_src = (SHIPPED[0] / "wallet.py").read_text(encoding="utf-8")
     assert "secrets.token_bytes(32)" in gen_src
-    mn_src = (SHIPPED[0] / "mnemonic.py").read_text()
+    mn_src = (SHIPPED[0] / "mnemonic.py").read_text(encoding="utf-8")
     assert "secrets.token_bytes(16)" in mn_src
 
 
