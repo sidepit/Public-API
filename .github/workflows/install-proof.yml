@@ -115,7 +115,7 @@ jobs:
           python -c "import platform, sys; print(platform.platform(), platform.machine(), sys.version)"
           python -m pip --version
           ls -l dist
-          python -c "import tomllib; print('VERSION=' + tomllib.load(open('pyproject.toml','rb'))['project']['version'])" >> "$GITHUB_ENV"
+          python -c "import re; print('VERSION=' + re.search(r'^version = \"([^\"]+)\"', open('pyproject.toml').read(), re.M).group(1))" >> "$GITHUB_ENV"
       - name: Stock-machine check — every dependency must come as a prebuilt wheel
         # The runner has compilers; a user's machine may not. This resolves the
         # whole dependency tree with building forbidden, so anything that would
