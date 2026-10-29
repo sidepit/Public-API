@@ -25,7 +25,6 @@ dependencies = [
     "pynng",
     "secp256k1",
     "base58",
-    "ripemd-hash>=1.0.1",
     "bitcoinlib",
     "textual>=8.0",
     "qrcode>=7.0",
