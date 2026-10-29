@@ -1,4 +1,5 @@
 """Offline safety tests for the customer-facing delegate command."""
+import os
 import importlib.util
 import json
 import stat
@@ -26,6 +27,7 @@ def _delegate_file(path: Path, account: str, wif: str, mode: int = 0o600) -> Pat
     return path
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes; Windows protects key files by user-profile ACL")
 def test_delegate_loader_accepts_only_distinct_0600_key(tmp_path):
     owner = gen_key()
     hot = gen_key()
@@ -63,6 +65,7 @@ def test_preview_identity_is_stable_and_expectation_is_explicit():
     assert "USD hedge" in agent._direction(1, 500, 2)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes; Windows protects key files by user-profile ACL")
 def test_records_are_write_once(tmp_path):
     path = tmp_path / "record.json"
     agent._write_once(path, {"public": "handle"})

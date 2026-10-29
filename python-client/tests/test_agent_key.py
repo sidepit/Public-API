@@ -4,6 +4,7 @@ Pins the 8-point contract from the first customer-sim run: validate account
 first, unique 0600 non-overwriting file, bind to the account, verify after
 write, public output only, nonzero exit + no file on bad input.
 """
+import os
 import stat
 
 import pytest
@@ -30,6 +31,7 @@ def test_invalid_account_rejected_before_any_write(keys_dir):
     assert list(keys_dir.glob("*.env")) == []          # nothing written
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX file modes; Windows protects key files by user-profile ACL")
 def test_mint_binds_account_0600_and_returns_public_only(keys_dir):
     r = agent_key.mint(ACCT)
     assert set(r) == {"pubkey", "trader_id", "account", "path"}

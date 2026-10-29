@@ -53,6 +53,6 @@ def test_address_path_default():
 def test_no_compiled_ripemd_dependency():
     import pathlib
     root = pathlib.Path(__file__).resolve().parents[2]
-    assert "ripemd-hash" not in (root / "pyproject.toml").read_text()
-    wallet_src = (root / "python-client/sidepit_trader/wallet.py").read_text()
+    assert "ripemd-hash" not in (root / "pyproject.toml").read_text(encoding="utf-8")
+    wallet_src = (root / "python-client/sidepit_trader/wallet.py").read_text(encoding="utf-8")
     assert "from ripemd" not in wallet_src
