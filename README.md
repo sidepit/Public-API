@@ -73,6 +73,21 @@ source .venv/bin/activate
 pip install sidepit
 ```
 
+One line on every desktop, nothing to compile (Python 3.10 or newer):
+
+- **Linux / WSL2:** `pip install sidepit`
+- **macOS** (Apple Silicon or Intel): `pip install sidepit` — no Xcode tools, no Homebrew needed.
+- **Windows, recommended — WSL2:** in PowerShell `wsl --install`, reboot, open
+  Ubuntu, then `pip install sidepit`. You get the Linux cockpit, and Claude
+  Code runs beside it in the same terminal.
+- **Windows, native:** `winget install Python.Python.3.12` (or python.org with
+  "Add python.exe to PATH" ticked), open a **new** terminal, then
+  `python -m pip install sidepit`. Windows Terminal renders the cockpit best;
+  keys live in `%USERPROFILE%\.sidepit\keys`.
+
+First run opens on the live market with no identity. Create, import or watch
+one from the doors, or press Escape to just look and add a key later with ctrl+a.
+
 Terminal one — the cockpit:
 
 ```sh
