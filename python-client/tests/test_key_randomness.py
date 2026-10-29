@@ -60,6 +60,9 @@ def test_entropy_source_cannot_be_swapped_for_a_weaker_one():
             src = path.read_text()
             assert not forbidden.search(src), f"{path}: forbidden entropy source"
             assert "os.urandom(" not in src, f"{path}: use secrets.token_bytes, not os.urandom"
+            # signing stays RFC 6979: no caller may hand libsecp256k1 or bitcoinlib its own nonce
+            assert "custom_nonce" not in src, f"{path}: custom nonce forbidden"
+            assert "use_rfc6979=False" not in src, f"{path}: RFC 6979 must stay on"
     gen_src = (SHIPPED[0] / "wallet.py").read_text()
     assert "secrets.token_bytes(32)" in gen_src
     mn_src = (SHIPPED[0] / "mnemonic.py").read_text()
