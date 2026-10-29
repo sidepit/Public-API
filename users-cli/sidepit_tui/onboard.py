@@ -9,6 +9,7 @@ so onboarding here IS provisioning for an agent):
   import   paste a WIF (also: `python -m sidepit_tui import`, or just drop an
            env file into ~/.sidepit/keys/).
   watch    just an address — read-only everywhere (verbs disabled).
+  look     nothing at all — the market only; add an identity later (ctrl+a).
 
 SIDEPIT_WIF / SIDEPIT_ID in the environment override everything (bot-style).
 """
@@ -32,6 +33,10 @@ def load_or_onboard(app) -> None:
     if row is not None:
         app.start_bridge(row["sidepit_id"], row["wif"], name=row["name"])
     else:
+        # No identity yet: the market comes up first (price, bars, book, the
+        # auction clock) and the identity doors sit on top. Escape or "just
+        # look" leaves a live read-only cockpit; ctrl+a adds a key later.
+        app.start_bridge("", None)
         app.push_screen(OnboardScreen())
 
 
@@ -44,9 +49,9 @@ class OnboardScreen(ModalScreen[None]):
 
     def action_cancel(self) -> None:
         self.dismiss(None)
-        if self.app.bridge is None:
-            self.app.add_event("sys", "no identity chosen — ctrl+a to add one "
-                                      "later; the market is visible read-only")
+        if not getattr(self.app.snap, "address", ""):
+            self.app.add_event("sys", "no identity — market only. ctrl+a adds "
+                                      "one when you want to trade")
 
     def compose(self) -> ComposeResult:
         with Grid(id="onboard-grid"):
@@ -57,6 +62,7 @@ class OnboardScreen(ModalScreen[None]):
                          variant="primary", id="ob-create")
             yield Button("Import — 12 words or WIF", id="ob-import")
             yield Button("Watch an address (read-only)", id="ob-watch")
+            yield Button("Just look — no identity, market only", id="ob-look")
             yield Input(placeholder="paste 12 words, WIF, or bc1q… address here",
                         id="ob-input", password=True)
             yield Static("", id="ob-msg")
@@ -117,6 +123,8 @@ class OnboardScreen(ModalScreen[None]):
                 self._msg("[red]paste a bc1q… address in the box first[/red]")
                 return
             self._finish("watch", raw, None)
+        elif event.button.id == "ob-look":
+            self.action_cancel()
 
 
 class AccountsScreen(ModalScreen[None]):
