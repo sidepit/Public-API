@@ -79,8 +79,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
         if size <= 0 or price <= 0:
             raise ValueError("size and price must be positive")
         return Intent("LMT",
-                      f"parsed → LMT {'BUY' if side > 0 else 'SELL'} {size} @ {price} "
-                      f"sats/USD · routing to the next DLOB deterministic auction",
+                      f"LMT {'BUY' if side > 0 else 'SELL'} {size} @ {price} "
+                      f"sats/USD · works until filled or cancelled",
                       side=side, size=size, price=price)
     m = _MKT.match(t)
     if m:
@@ -89,9 +89,8 @@ def parse(text: str, *, last_sats: int = 0, contract_usd: int = 500) -> Intent:
         if size <= 0:
             raise ValueError("size must be positive")
         return Intent("MKT",
-                      f"parsed → MKT {'BUY' if side > 0 else 'SELL'} {size} · "
-                      f"market order: fills whatever is available in the next auction; anything unfilled cancels · "
-                      f"routing to the next DLOB auction",
+                      f"MKT {'BUY' if side > 0 else 'SELL'} {size} · "
+                      f"market order: fills what's there, the rest cancels",
                       side=side, size=size)
     m = _CXL.match(t)
     if m:

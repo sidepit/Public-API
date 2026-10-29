@@ -193,8 +193,8 @@ class DoggieScreen(Screen):
         if event.button.id == "tap-usd":
             # toward dollars: hedge $unit more = BUY one USDBTC contract
             b.cmd("market", 1, 1)
-            self.app.add_event("ok", f"${s.contract_usd} more USD at market price · fills in the next auction")
+            self.app.add_event("ok", f"${s.contract_usd} more USD at market price")
         elif event.button.id == "tap-btc":
             # toward bitcoin: unwind $unit of hedge = SELL one contract
             b.cmd("market", -1, 1)
-            self.app.add_event("ok", f"${s.contract_usd} more bitcoin at market price · fills in the next auction")
+            self.app.add_event("ok", f"${s.contract_usd} more bitcoin at market price")

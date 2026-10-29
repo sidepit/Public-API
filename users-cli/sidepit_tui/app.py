@@ -29,7 +29,7 @@ from textual.containers import Container, Grid, Horizontal, Vertical
 from textual.coordinate import Coordinate
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Input, Label, RichLog, Select,
+from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select,
                              Static, TabbedContent, TabPane)
 
 from .bridge import Bridge, Snap
@@ -127,6 +127,12 @@ def qr_unicode(data: str) -> str:
             line += "█" if top and bot else "▀" if top else "▄" if bot else " "
         lines.append(line)
     return "\n".join(lines)
+
+
+def _working(bids: int, asks: int) -> str:
+    if not bids and not asks:
+        return "no orders working"
+    return f"working: {bids} bid · {asks} ask"
 
 
 def hhmm_left(close_ms: int) -> str:
@@ -237,6 +243,9 @@ class SidepitApp(App):
                color: {BRIGHT}; }}
     #prompt:focus {{ border: none; }}
     #prompt .input--placeholder {{ color: {DIM}; text-style: italic; }}
+    #hint {{ height: 1; padding: 0 1; }}
+    #qty {{ width: 8; }}
+    #buy-mkt, #sell-mkt {{ min-width: 8; }}
     #prompt .input--cursor {{ background: {GREEN}; color: {BG}; }}
     #prompt .input--selection {{ background: {GREEN_DIM}; }}
     .try {{ height: 1; padding: 0; min-width: 0; border: none;
@@ -356,11 +365,17 @@ class SidepitApp(App):
                         yield Static("", id="book", classes="panel")
                         yield Static(title("activity"), id="activity-title")
                         yield RichLog(markup=True, wrap=True, id="log")
+                        yield Static(f"[{DIM}]type:  buy 1 at market · sell 2 @ 1259 · "
+                                     f"cancel all · go flat   — or ctrl+d for the one-tap wallet[/]",
+                                     id="hint")
                         with Horizontal(id="promptrow"):
                             yield Label("trader@sidepit ›", id="promptlabel")
                             yield Input(placeholder='say what you want. plain english. '
                                                     'e.g. "go flat and exit"',
                                         id="prompt")
+                            yield Input(value="1", placeholder="qty", id="qty")
+                            yield Button("BUY", variant="success", id="buy-mkt")
+                            yield Button("SELL", variant="error", id="sell-mkt")
                     with Vertical(id="right"):
                         yield Static(title("session"), classes="paneltitle")
                         yield Static("", id="session", classes="panel")
@@ -430,6 +445,7 @@ class SidepitApp(App):
                             yield Button("register", variant="success", id="register")
                         yield Static("", id="del-derived")
         yield Static("", id="statbar")
+        yield Footer()
 
     open_doggie_on_start = False       # set by `sidepit doggie`
 
@@ -540,7 +556,7 @@ class SidepitApp(App):
                 f"  entry {p['entry_price']} · mark {s.last or '—'} · "
                 f"pnl [{color}]{self.money(upnl, signed=True)}[/]\n"
                 f"  [{DIM}]entry resets daily at settlement · "
-                f"{p['open_bids']}b/{p['open_asks']}a working[/]")
+                f"{_working(p['open_bids'], p['open_asks'])}[/]")
         self._q("#positions", Static).update(
             "\n".join(lines) or f"[{DIM}]no positions[/]")
         # risk envelope — real numbers, BTC-denominated
@@ -739,7 +755,7 @@ class SidepitApp(App):
             + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
-            f"{dot} auction sync · envelope: "
+            f"{dot} {'OPEN' if s.is_open else 'CLOSED'} · envelope: "
             f"[{RED if s.is_restricted else GREEN}]{env}[/] · book: transparent · "
             f"denom: [{GOLD}]{self.denom}[/] · session {s.session_id or '—'}")
 
@@ -747,7 +763,7 @@ class SidepitApp(App):
     def _refresh_book(self) -> None:
         """5-level transparent book + spread bar with the DLOB countdown."""
         s = self.snap
-        out = [title("book · transparent · DLOB 1s deterministic auctions")]
+        out = [title("book")]
         if not s.depth_bids and not s.depth_asks:
             out.append(f"[{DIM}]no live book (exchange {s.state})[/]")
         else:
@@ -756,10 +772,8 @@ class SidepitApp(App):
             for px, sz in reversed(s.depth_asks[:5]):
                 bar = "█" * max(1, int(sz / mx * 22))
                 out.append(f"  [{RED}]{px:>7}[/]  {sz:>4}  [{RED_DIM}]{bar}[/]")
-            t_left = 1.0 - (time.time() % 1.0)
-            badge = (f"[{GOLD}]AUCTION ARMED[/] [{DIM}]·[/] "
-                     f"[{GOLD}]t-{t_left:.2f}s[/]" if s.is_open
-                     else f"[{DIM}]auction idle ({s.state})[/]")
+            badge = (f"[{GREEN}]open[/]" if s.is_open
+                     else f"[{DIM}]closed ({s.state})[/]")
             spread = (s.depth_asks[0][0] - s.depth_bids[0][0]
                       if s.depth_asks and s.depth_bids else 0)
             out.append("")
@@ -931,6 +945,11 @@ class SidepitApp(App):
         if b is None or s.watch_only:
             self.add_event("err", "watch-only session — no signing key loaded")
             return
+        if it.kind in ("LMT", "MKT", "FLATTEN_ALL") and not s.is_open:
+            opens = hhmm_left(s.open_ms)
+            self.add_event("err", "market is closed — order not sent"
+                           + (f" · opens in {opens}" if opens else ""))
+            return
         if it.kind == "LMT":
             b.cmd("order", it.side, it.price, it.size)
         elif it.kind == "MKT":
@@ -971,6 +990,19 @@ class SidepitApp(App):
             return None
 
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id in ("buy-mkt", "sell-mkt"):
+            verb = "buy" if event.button.id == "buy-mkt" else "sell"
+            qty = self._q("#qty", Input).value.strip() or "1"
+            self.add_event("cmd", f'"{verb} {qty} at market"')
+            try:
+                it = parse(f"{verb} {qty} at market", last_sats=self.snap.last,
+                           contract_usd=self.snap.contract_usd)
+            except ValueError as e:
+                self.add_event("err", str(e))
+                return
+            self.add_event("sys", it.summary)
+            self._execute(it)
+            return
         bid = event.button.id or ""
         b = self.bridge
         if bid.startswith("try-"):
