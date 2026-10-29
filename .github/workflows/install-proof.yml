@@ -1,40 +1,87 @@
 name: Install proof
 
-# Clean-machine proof: build the wheel once, then `pip install` it into a fresh
-# venv on every OS/Python a user might have, pulling dependencies from PyPI
-# exactly as `pip install sidepit` would. Every leg runs even when another
-# fails, so one run shows the whole platform picture.
+# Clean-machine proof: build every release artifact once, then `pip install
+# sidepit` into a fresh venv on every OS/Python a user might have, pulling
+# dependencies from PyPI exactly as a user would. Every leg runs even when
+# another fails, so one run shows the whole platform picture. publish.yml
+# calls this workflow and refuses to upload unless it is all green.
 
 on:
   workflow_dispatch:
+  workflow_call:
   pull_request:
     paths:
       - ".github/workflows/install-proof.yml"
       - "pyproject.toml"
+      - "setup.py"
+      - "MANIFEST.in"
+      - "tools/**"
 
 permissions:
   contents: read
 
+env:
+  # build tools are pinned: the same inputs produce the release every time
+  BUILD_TOOLS: build==1.6.1 setuptools==80.10.2 wheel==0.48.0 cffi==2.1.1
+
 jobs:
   build:
+    name: pure wheel + sdist
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.12"
-      - name: Build wheel and source distribution
+      - name: Build
         run: |
-          python -m pip install build
-          python -m build
+          python -m pip install $BUILD_TOOLS
+          python -m build --no-isolation
+          python tools/check_python_dist.py dist/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: python-package
+          name: dist-pure
+          path: dist/
+          if-no-files-found: error
+
+  native:
+    # Platforms where upstream secp256k1 publishes no wheel get the compiled
+    # module inside sidepit's own platform wheel (setup.py, SIDEPIT_BUNDLE_SECP256K1).
+    # Built against the stable ABI on 3.10: one wheel per platform serves 3.10+.
+    name: bundled wheel (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-15-intel]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.10"
+      - name: Fetch the pinned upstream secp256k1 source
+        run: |
+          python -m pip install $BUILD_TOOLS
+          python tools/vendor_secp256k1.py
+      - name: Build
+        env:
+          SIDEPIT_BUNDLE_SECP256K1: "1"
+        run: |
+          python -m build --wheel --no-isolation
+          python tools/check_python_dist.py dist/*.whl
+          ls -l dist
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dist-native-${{ matrix.os }}
           path: dist/
           if-no-files-found: error
 
   install:
-    needs: build
+    name: pip install (${{ matrix.os }}, ${{ matrix.python-version }})
+    needs: [build, native]
     strategy:
       fail-fast: false
       matrix:
@@ -51,8 +98,9 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
-          name: python-package
+          pattern: dist-*
           path: dist
+          merge-multiple: true
       - name: Fresh venv
         run: |
           python -m venv "$RUNNER_TEMP/clean"
@@ -61,11 +109,13 @@ jobs:
           else
             echo "$RUNNER_TEMP/clean/Scripts" >> "$GITHUB_PATH"
           fi
-      - name: Describe the machine
+      - name: Describe the machine and the release artifacts
         run: |
           python -m pip install --quiet --upgrade pip
           python -c "import platform, sys; print(platform.platform(), platform.machine(), sys.version)"
           python -m pip --version
+          ls -l dist
+          python -c "import tomllib; print('VERSION=' + tomllib.load(open('pyproject.toml','rb'))['project']['version'])" >> "$GITHUB_ENV"
       - name: Stock-machine check — every dependency must come as a prebuilt wheel
         # The runner has compilers; a user's machine may not. This resolves the
         # whole dependency tree with building forbidden, so anything that would
@@ -73,12 +123,14 @@ jobs:
         # below would succeed on the runner.
         id: stock
         continue-on-error: true
-        run: "python -m pip install --dry-run --only-binary=:all: dist/*.whl"
-      - name: pip install the wheel (dependencies from PyPI, as a user would)
-        run: python -m pip install dist/*.whl
+        run: "python -m pip install --dry-run --only-binary=:all: --find-links dist sidepit==$VERSION"
+      - name: pip install sidepit (release artifacts + dependencies from PyPI, as a user would)
+        run: python -m pip install --find-links dist "sidepit==$VERSION"
       - name: Show what was installed and how
         if: always()
-        run: python -m pip list
+        run: |
+          python -m pip list
+          python -c "import secp256k1, sidepit_trader; print('secp256k1 from', secp256k1.__file__)"
       - name: Smoke-test the installed package outside the checkout
         working-directory: ${{ runner.temp }}
         env:
