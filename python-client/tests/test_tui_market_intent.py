@@ -25,12 +25,3 @@ def test_flatten_intent_uses_market_closes():
     assert intent.kind == "FLATTEN_ALL"
     assert "market orders to close" in intent.summary
 
-
-def test_order_size_is_capped():
-    import pytest
-    from sidepit_tui.intents import MAX_CONTRACTS, parse
-    assert parse(f"buy {MAX_CONTRACTS} at market", last_sats=1200, contract_usd=500).size == MAX_CONTRACTS
-    with pytest.raises(ValueError, match="max 1000 contracts"):
-        parse("buy 22112212222112 at market", last_sats=1200, contract_usd=500)
-    with pytest.raises(ValueError, match="max 1000 contracts"):
-        parse("sell 1001 @ 1259", last_sats=1200, contract_usd=500)

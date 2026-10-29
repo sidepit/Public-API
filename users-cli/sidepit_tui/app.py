@@ -205,6 +205,7 @@ class ShowSecret(ModalScreen[None]):
 # ---------------------------------------------------------------------------
 class SidepitApp(App):
     TITLE = "sidepit // cockpit"
+    ENABLE_COMMAND_PALETTE = False     # Textual's ctrl+p search box: not for traders
     BINDINGS = [("ctrl+q", "quit", "quit"), ("ctrl+r", "refresh", "refresh"),
                 ("ctrl+a", "accounts", "accounts"),
                 ("ctrl+d", "doggie", "doggie view")]
@@ -373,7 +374,8 @@ class SidepitApp(App):
                             yield Input(placeholder='say what you want. plain english. '
                                                     'e.g. "go flat and exit"',
                                         id="prompt")
-                            yield Input(value="1", placeholder="qty", id="qty", compact=True)
+                            yield Input(value="1", placeholder="qty", id="qty", compact=True,
+                                        type="integer", max_length=3)
                             yield Button("BUY", variant="success", id="buy-mkt", compact=True)
                             yield Button("SELL", variant="error", id="sell-mkt", compact=True)
                     with Vertical(id="right"):
