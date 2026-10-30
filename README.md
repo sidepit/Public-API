@@ -84,8 +84,10 @@ and follow the steps top to bottom.
 
 **Windows — native, no WSL2**
 
-1. Install Python 3.12 from the Microsoft Store, or from
+1. Install **Python 3.13** from the Microsoft Store, or from
    <https://www.python.org/downloads/> with *Add python.exe to PATH* ticked.
+   Not 3.15: one dependency has no Windows wheel for it yet, so pip tries to
+   compile and fails on a stock machine.
 2. Start menu → `PowerShell`.
 3. ```powershell
    pip install sidepit
