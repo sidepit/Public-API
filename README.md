@@ -57,11 +57,7 @@ sending straight to the lock address does not identify the intended account.
 
 ## Claude + Sidepit: two terminals
 
-**Step 1 — install the cockpit.** Python 3.10 to 3.14 — **not 3.15 yet**
-(one dependency has no 3.15 wheel; pip would try to compile it and fail).
-Nothing compiles: every piece arrives as a prebuilt wheel on Linux, macOS
-(Apple Silicon and Intel) and Windows. Pick your machine and follow the steps
-top to bottom.
+**Step 1 — install the cockpit.** Pick your machine, follow the steps.
 
 **Windows — recommended: WSL2 (Ubuntu inside Windows)**
 
@@ -86,27 +82,24 @@ top to bottom.
 
 **Windows — native, no WSL2**
 
-1. Install **Python 3.13** (not 3.15) from the Microsoft Store, or from
-   <https://www.python.org/downloads/> with *Add python.exe to PATH* ticked.
+1. Download and install Python 3.13:
+   <https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.exe>
+   — tick *Add python.exe to PATH* on the first screen.
 2. Start menu → `PowerShell`.
 3. ```powershell
    pip install sidepit
    sidepit
    ```
-   If `sidepit` is not found, run `python -m sidepit_tui` instead. Windows
-   Terminal renders the cockpit best. Keys live in `%USERPROFILE%\.sidepit\keys`.
 
 **macOS (Apple Silicon or Intel)**
 
-1. Install **Python 3.13** (not 3.15) from <https://www.python.org/downloads/>
-   (the `.pkg` installer). No Xcode tools, no Homebrew needed.
-2. Open a **new** Terminal window (Applications → Utilities → Terminal):
-   ```sh
+1. Download and install Python 3.13:
+   <https://www.python.org/ftp/python/3.13.17/python-3.13.17-macos11.pkg>
+2. Open Terminal (Applications → Utilities → Terminal).
+3. ```sh
    pip3 install sidepit
    sidepit
    ```
-   Already on Homebrew? `brew install pipx && pipx install sidepit && pipx ensurepath`,
-   then reopen Terminal.
 
 **Linux (Ubuntu / Debian)**
 
