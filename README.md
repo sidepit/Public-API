@@ -84,17 +84,15 @@ and follow the steps top to bottom.
 
 **Windows — native, no WSL2**
 
-1. Start menu → `PowerShell`. In it:
-   ```powershell
-   winget install Python.Python.3.12
-   ```
-   (Or python.org's installer with *Add python.exe to PATH* ticked.)
-2. Open a **new** terminal — the old one does not see Python yet.
+1. Install Python 3.12 from the Microsoft Store, or from
+   <https://www.python.org/downloads/> with *Add python.exe to PATH* ticked.
+2. Start menu → `PowerShell`.
 3. ```powershell
-   python -m pip install sidepit
+   pip install sidepit
    sidepit
    ```
-   Windows Terminal renders the cockpit best. Keys live in `%USERPROFILE%\.sidepit\keys`.
+   If `sidepit` is not found, run `python -m sidepit_tui` instead. Windows
+   Terminal renders the cockpit best. Keys live in `%USERPROFILE%\.sidepit\keys`.
 
 **macOS (Apple Silicon or Intel)**
 
