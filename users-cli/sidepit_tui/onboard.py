@@ -164,6 +164,7 @@ class BackupScreen(ModalScreen[None]):
                                      self._wif, False), id="backup-body")
             with Horizontal(id="backup-buttons"):
                 yield Button("show", id="bk-show")
+                yield Button("copy id", id="bk-copy-id")
                 yield Button("copy words", id="bk-copy-words",
                              disabled=not self._words)
                 yield Button("copy WIF", id="bk-copy-wif", disabled=not self._wif)
@@ -193,6 +194,8 @@ class BackupScreen(ModalScreen[None]):
                 backup_text(self._path, self._id, self._words, self._wif,
                             self._shown))
             event.button.label = "hide" if self._shown else "show"
+        elif event.button.id == "bk-copy-id":
+            self._copy("sidepit_id", self._id)
         elif event.button.id == "bk-copy-words" and self._words:
             self._copy("12 words", self._words)
         elif event.button.id == "bk-copy-wif" and self._wif:

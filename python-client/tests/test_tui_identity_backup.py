@@ -65,3 +65,22 @@ def test_keystore_identity_returns_words_and_path(tmp_path, monkeypatch):
     row = keystore.identity("tui")
     assert row["mnemonic"] == WORDS and row["wif"] == WIF
     assert keystore.identity_path("tui") == p
+
+
+def test_backup_screen_copies_full_id():
+    copied = []
+
+    class T(App):
+        def copy_to_clipboard(self, text):
+            copied.append(text)
+
+    async def run():
+        app = T()
+        async with app.run_test() as pilot:
+            app.push_screen(onboard.BackupScreen("tui", "bc1qcw68kk7dq4longaddresssa7m",
+                                                 WIF, WORDS, "/k/tui.env"))
+            await pilot.pause()
+            await pilot.click("#bk-copy-id")
+            await pilot.pause()
+            assert copied == ["bc1qcw68kk7dq4longaddresssa7m"]
+    asyncio.run(run())

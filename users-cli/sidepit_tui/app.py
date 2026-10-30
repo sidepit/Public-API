@@ -217,6 +217,7 @@ class SidepitApp(App):
                  padding: 0 1; content-align-vertical: middle; }}
     #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
     #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
+    #copy-id {{ width: 11; height: 1; margin: 0 1; }}
     #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
                                                             background: {PANEL};
                                                             color: {GOLD}; }}
@@ -355,6 +356,7 @@ class SidepitApp(App):
             yield Select([("₿ BTC", "BTC"), ("sat SATS", "SATS")], value="BTC",
                          id="denom-pick", allow_blank=False)
             yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
+            yield Button("copy id", id="copy-id", compact=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
                 with Horizontal(id="cockpit-grid"):
@@ -991,7 +993,20 @@ class SidepitApp(App):
         except ValueError:
             return None
 
+    def copy_id(self) -> None:
+        """Put the full sidepit_id on the clipboard; the panels only show a
+        shortened one. Pop-up confirms, log keeps the whole address."""
+        addr = self.snap.address
+        if not addr:
+            self.add_event("warn", "no identity yet — ctrl+a adds one")
+            return
+        self.copy_to_clipboard(addr)
+        self.add_event("ok", f"id copied: {addr}")
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "copy-id":
+            self.copy_id()
+            return
         if event.button.id in ("buy-mkt", "sell-mkt"):
             verb = "buy" if event.button.id == "buy-mkt" else "sell"
             qty = self._q("#qty", Input).value.strip() or "1"
@@ -1017,8 +1032,9 @@ class SidepitApp(App):
         if bid == "chain-refresh":
             b.cmd("chain_refresh")
         elif bid == "fund-show":
-            self.add_event("ok", f"send BTC to {self.snap.address} — it appears "
-                                 f"here automatically, then LOCK goes green")
+            self.copy_to_clipboard(self.snap.address)
+            self.add_event("ok", f"address copied: {self.snap.address} — send BTC "
+                                 f"to it; it appears here automatically, then LOCK goes green")
         elif bid == "lock-all":
             total = self.snap.chain_confirmed + self.snap.chain_mempool
             if total <= 0:
