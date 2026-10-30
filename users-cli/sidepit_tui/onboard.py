@@ -4,8 +4,8 @@ Three doors, on the SDK flat-file keystore (`~/.sidepit/keys/`, one 0600 env
 file per identity — keys NEVER live in a database; bots read the same files,
 so onboarding here IS provisioning for an agent):
 
-  create   mint a key, show the WIF ONCE (it IS the account; no recovery),
-           store it, continue funded onboarding on the Fund tab.
+  create   mint a key, store it, then offer the backup (12 words / WIF,
+           hidden until asked). Skipping is safe: the file is the key.
   import   paste a WIF (also: `python -m sidepit_tui import`, or just drop an
            env file into ~/.sidepit/keys/).
   watch    just an address — read-only everywhere (verbs disabled).
@@ -75,11 +75,12 @@ class OnboardScreen(ModalScreen[None]):
     """
 
     def _finish(self, name: str, sidepit_id: str, wif: str | None,
-                mnemonic: str | None = None) -> None:
-        keystore.save_identity(name, sidepit_id, wif, active=True,
-                               mnemonic=mnemonic)
+                mnemonic: str | None = None):
+        path = keystore.save_identity(name, sidepit_id, wif, active=True,
+                                      mnemonic=mnemonic)
         self.app.start_bridge(sidepit_id, wif, name=name)
         self.dismiss(None)
+        return path
 
     def _msg(self, text: str) -> None:
         self.query_one("#ob-msg", Static).update(text)
@@ -89,22 +90,10 @@ class OnboardScreen(ModalScreen[None]):
         if event.button.id == "ob-create":
             from sidepit_trader import mnemonic
             words, ident = mnemonic.new_identity_words()
-            grid = "\n".join("   ".join(f"{i + 1:>2}. {w:<10}"
-                             for i, w in list(enumerate(words.split()))[r * 4:r * 4 + 4])
-                             for r in range(3))
-            # show the secret BEFORE storing so the user must acknowledge it
-            from .app import ShowSecret
-            self.app.push_screen(ShowSecret(
-                "NEW IDENTITY — write down the 12 words NOW (they ARE the "
-                "account; no recovery)",
-                f"{grid}\n\n"
-                f"sidepit_id : {ident.sidepit_id}\n"
-                f"WIF        : {ident.wif}\n\n"
-                f"The 12 words restore this key in ANY standard wallet (BIP39/84)\n"
-                f"and here (import → paste the words). Stored as a 0600 flat file\n"
-                f"in ~/.sidepit/keys/; keep an offline copy of the words."),
-                lambda _: self._finish("tui", ident.sidepit_id, ident.wif,
-                                       mnemonic=words))
+            # stored first: skipping the backup is safe, the key is on disk
+            path = self._finish("tui", ident.sidepit_id, ident.wif, mnemonic=words)
+            self.app.push_screen(BackupScreen("tui", ident.sidepit_id, ident.wif,
+                                              words, str(path), first_time=True))
         elif event.button.id == "ob-import":
             from sidepit_trader import mnemonic
             words = None
@@ -127,6 +116,94 @@ class OnboardScreen(ModalScreen[None]):
             self.action_cancel()
 
 
+HIDDEN = "•••• hidden — press show"
+
+
+def backup_text(path: str, sidepit_id: str, words: str | None,
+                wif: str | None, shown: bool) -> str:
+    """The backup panel body. Secrets appear only when `shown`."""
+    if shown and words:
+        ws = words.split()
+        grid = "\n".join("   ".join(f"{i + 1:>2}. {w:<10}" for i, w in
+                                    list(enumerate(ws))[r * 4:r * 4 + 4])
+                         for r in range(3))
+    elif words:
+        grid = HIDDEN + "\n\n"          # same height as the grid: nothing jumps
+    else:
+        grid = "(imported from a WIF — no words; the WIF is the backup)\n\n"
+    return (f"stored on this computer, readable only by you:\n  {path}\n\n"
+            f"sidepit_id : {sidepit_id}\n\n"
+            f"12 words   :\n{grid}\n\n"
+            f"WIF        : {wif if shown else HIDDEN}\n\n"
+            f"Back it up when you have a minute — any one of these restores "
+            f"the account:\n"
+            f"write the 12 words down · copy the WIF into a password manager · "
+            f"keep a copy of the file above.\n"
+            f"Any time: ctrl+a → backup.")
+
+
+class BackupScreen(ModalScreen[None]):
+    """Show one identity's backup material, hidden until the human asks."""
+
+    BINDINGS = [("escape", "dismiss(None)", "close")]
+
+    def __init__(self, name: str, sidepit_id: str, wif: str | None,
+                 words: str | None, path: str, first_time: bool = False):
+        super().__init__()
+        self._name, self._id, self._wif, self._words, self._path = (
+            name, sidepit_id, wif, words, path)
+        self._first = first_time
+        self._shown = False
+
+    def compose(self) -> ComposeResult:
+        title = ("[b]Identity created and saved[/b] — back it up now or later"
+                 if self._first else f"[b]backup[/b] — {self._name}")
+        with Grid(id="backup-grid"):
+            yield Label(title, id="backup-title")
+            yield Static(backup_text(self._path, self._id, self._words,
+                                     self._wif, False), id="backup-body")
+            with Horizontal(id="backup-buttons"):
+                yield Button("show", id="bk-show")
+                yield Button("copy id", id="bk-copy-id")
+                yield Button("copy words", id="bk-copy-words",
+                             disabled=not self._words)
+                yield Button("copy WIF", id="bk-copy-wif", disabled=not self._wif)
+                yield Button("Later — it's saved here" if self._first else "close",
+                             variant="primary", id="bk-done")
+            yield Static("", id="backup-msg")
+
+    DEFAULT_CSS = """
+    #backup-grid {
+        grid-size: 1; grid-gutter: 1; padding: 1 2;
+        width: 86; height: auto; border: thick $primary; background: $surface;
+    }
+    #backup-buttons { height: 3; }
+    #backup-buttons Button { margin-right: 1; }
+    """
+
+    def _copy(self, what: str, text: str) -> None:
+        self.app.copy_to_clipboard(text)
+        self.query_one("#backup-msg", Static).update(
+            f"{what} copied to the clipboard — paste it somewhere safe, then "
+            f"copy something else to clear it")
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id == "bk-show":
+            self._shown = not self._shown
+            self.query_one("#backup-body", Static).update(
+                backup_text(self._path, self._id, self._words, self._wif,
+                            self._shown))
+            event.button.label = "hide" if self._shown else "show"
+        elif event.button.id == "bk-copy-id":
+            self._copy("sidepit_id", self._id)
+        elif event.button.id == "bk-copy-words" and self._words:
+            self._copy("12 words", self._words)
+        elif event.button.id == "bk-copy-wif" and self._wif:
+            self._copy("WIF", self._wif)
+        elif event.button.id == "bk-done":
+            self.dismiss(None)
+
+
 class AccountsScreen(ModalScreen[None]):
     """Quick account switcher (ctrl+a) — list the keystore, switch with one
     keypress, or add another identity through the onboarding doors. Mirrors the
@@ -142,6 +219,7 @@ class AccountsScreen(ModalScreen[None]):
             with Horizontal(id="accounts-buttons"):
                 yield Button("switch", variant="primary", id="acct-switch")
                 yield Button("add identity", id="acct-add")
+                yield Button("backup", id="acct-backup")
                 yield Button("close", id="acct-close")
 
     DEFAULT_CSS = """
@@ -192,5 +270,16 @@ class AccountsScreen(ModalScreen[None]):
         elif event.button.id == "acct-add":
             self.dismiss(None)
             self.app.push_screen(OnboardScreen())
+        elif event.button.id == "acct-backup":
+            name = self._selected()
+            row = keystore.identity(name) if name else None
+            if not row:
+                return
+            if not row["wif"]:
+                self.app.add_event("sys", f"'{name}' is watch-only — nothing to back up")
+                return
+            self.app.push_screen(BackupScreen(name, row["sidepit_id"], row["wif"],
+                                              row.get("mnemonic"),
+                                              str(keystore.identity_path(name))))
         elif event.button.id == "acct-close":
             self.dismiss(None)

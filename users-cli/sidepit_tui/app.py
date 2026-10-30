@@ -215,7 +215,7 @@ class SidepitApp(App):
                align-vertical: middle; }}
     #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
                  padding: 0 1; content-align-vertical: middle; }}
-    #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
+    #wallet-pick {{ width: 24; height: 1; background: {PANEL}; }}
     #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
     #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
                                                             background: {PANEL};
@@ -597,8 +597,7 @@ class SidepitApp(App):
                     else f"[{RED}]AGENT[/] · not authorized yet")
         else:
             mode = f"[{GOLD}]SIGNING[/]"
-        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
-                  else "account  —",
+        dlines = [f"account  [{BRIGHT}]{s.address}[/]" if s.address else "account  —",
                   f"mode     {mode}"]
         if s.is_delegate:
             dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
@@ -740,20 +739,19 @@ class SidepitApp(App):
                 ("agent" if s.delegate_active else "agent · unverified")
                 if s.is_delegate else "signing")
         spread = s.ask - s.bid if s.ask and s.bid else 0
-        account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
+        account = s.address or "—"
         self._q("#titlebar", Static).update(
-            f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
-            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]   "
-            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]   "
-            f"[{GOLD}]last {s.last or '—'}[/]  [{BRIGHT}]{usd_hint(s.last)}[/]   "
-            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]   "
-            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]   "
+            f"[{BRIGHT}]sidepit // cockpit[/]  "
+            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]  "
+            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]  "
+            f"[{GOLD}]last {s.last or '—'}[/] [{BRIGHT}]{usd_hint(s.last)}[/]  "
+            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]  "
+            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]  "
             f"[{DIM}]spread {spread or '—'}[/]\n"
-            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  [{DIM}]· {mode} ·[/]  "
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  "
+            f"[{DIM}]· {mode} ·[/]  "
             f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
-            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → "
-            f"{s.tick_value_sats} sat[/]  [{DIM}]· ctrl+d[/] [{GOLD}]doggie[/]  "
-            f"[{DIM}]· session {s.session_id or '—'}[/]"
+            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → {s.tick_value_sats} sat[/]"
             + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
@@ -991,6 +989,21 @@ class SidepitApp(App):
         except ValueError:
             return None
 
+    def copy_id(self) -> None:
+        """Put the full sidepit_id on the clipboard; the panels only show a
+        shortened one. Pop-up confirms, log keeps the whole address."""
+        addr = self.snap.address
+        if not addr:
+            self.add_event("warn", "no identity yet — ctrl+a adds one")
+            return
+        self.copy_to_clipboard(addr)
+        self.add_event("ok", f"id copied: {addr}")
+
+    def on_click(self, event) -> None:
+        w = getattr(event, "widget", None)
+        if w is not None and w.id in ("titlebar", "session"):
+            self.copy_id()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id in ("buy-mkt", "sell-mkt"):
             verb = "buy" if event.button.id == "buy-mkt" else "sell"
@@ -1017,8 +1030,9 @@ class SidepitApp(App):
         if bid == "chain-refresh":
             b.cmd("chain_refresh")
         elif bid == "fund-show":
-            self.add_event("ok", f"send BTC to {self.snap.address} — it appears "
-                                 f"here automatically, then LOCK goes green")
+            self.copy_to_clipboard(self.snap.address)
+            self.add_event("ok", f"address copied: {self.snap.address} — send BTC "
+                                 f"to it; it appears here automatically, then LOCK goes green")
         elif bid == "lock-all":
             total = self.snap.chain_confirmed + self.snap.chain_mempool
             if total <= 0:
