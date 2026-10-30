@@ -57,9 +57,11 @@ sending straight to the lock address does not identify the intended account.
 
 ## Claude + Sidepit: two terminals
 
-**Step 1 — install the cockpit.** Python 3.10 or newer. Nothing compiles: every piece arrives as a prebuilt
-wheel on Linux, macOS (Apple Silicon and Intel) and Windows. Pick your machine
-and follow the steps top to bottom.
+**Step 1 — install the cockpit.** Python 3.10 to 3.14 — **not 3.15 yet**
+(one dependency has no 3.15 wheel; pip would try to compile it and fail).
+Nothing compiles: every piece arrives as a prebuilt wheel on Linux, macOS
+(Apple Silicon and Intel) and Windows. Pick your machine and follow the steps
+top to bottom.
 
 **Windows — recommended: WSL2 (Ubuntu inside Windows)**
 
@@ -84,10 +86,8 @@ and follow the steps top to bottom.
 
 **Windows — native, no WSL2**
 
-1. Install **Python 3.13** from the Microsoft Store, or from
+1. Install **Python 3.13** (not 3.15) from the Microsoft Store, or from
    <https://www.python.org/downloads/> with *Add python.exe to PATH* ticked.
-   Not 3.15: one dependency has no Windows wheel for it yet, so pip tries to
-   compile and fails on a stock machine.
 2. Start menu → `PowerShell`.
 3. ```powershell
    pip install sidepit
@@ -98,8 +98,8 @@ and follow the steps top to bottom.
 
 **macOS (Apple Silicon or Intel)**
 
-1. Install Python from <https://www.python.org/downloads/> (the `.pkg`
-   installer). No Xcode tools, no Homebrew needed.
+1. Install **Python 3.13** (not 3.15) from <https://www.python.org/downloads/>
+   (the `.pkg` installer). No Xcode tools, no Homebrew needed.
 2. Open a **new** Terminal window (Applications → Utilities → Terminal):
    ```sh
    pip3 install sidepit
