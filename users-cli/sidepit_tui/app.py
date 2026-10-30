@@ -215,9 +215,8 @@ class SidepitApp(App):
                align-vertical: middle; }}
     #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
                  padding: 0 1; content-align-vertical: middle; }}
-    #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
+    #wallet-pick {{ width: 24; height: 1; background: {PANEL}; }}
     #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
-    #copy-id {{ width: 11; height: 1; margin: 0 1; }}
     #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
                                                             background: {PANEL};
                                                             color: {GOLD}; }}
@@ -356,7 +355,6 @@ class SidepitApp(App):
             yield Select([("₿ BTC", "BTC"), ("sat SATS", "SATS")], value="BTC",
                          id="denom-pick", allow_blank=False)
             yield Select([], id="wallet-pick", prompt="wallet", allow_blank=True)
-            yield Button("copy id", id="copy-id", compact=True)
         with TabbedContent(initial="tab-cockpit"):
             with TabPane("cockpit", id="tab-cockpit"):
                 with Horizontal(id="cockpit-grid"):
@@ -599,8 +597,8 @@ class SidepitApp(App):
                     else f"[{RED}]AGENT[/] · not authorized yet")
         else:
             mode = f"[{GOLD}]SIGNING[/]"
-        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
-                  else "account  —",
+        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/] "
+                  f"[{DIM}](click copies id)[/]" if s.address else "account  —",
                   f"mode     {mode}"]
         if s.is_delegate:
             dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
@@ -744,18 +742,17 @@ class SidepitApp(App):
         spread = s.ask - s.bid if s.ask and s.bid else 0
         account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
         self._q("#titlebar", Static).update(
-            f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
-            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]   "
-            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]   "
-            f"[{GOLD}]last {s.last or '—'}[/]  [{BRIGHT}]{usd_hint(s.last)}[/]   "
-            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]   "
-            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]   "
+            f"[{BRIGHT}]sidepit // cockpit[/]  "
+            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]  "
+            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]  "
+            f"[{GOLD}]last {s.last or '—'}[/] [{BRIGHT}]{usd_hint(s.last)}[/]  "
+            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]  "
+            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]  "
             f"[{DIM}]spread {spread or '—'}[/]\n"
-            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  [{DIM}]· {mode} ·[/]  "
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/] [{DIM}](click copies id)[/]  "
+            f"[{DIM}]· {mode} ·[/]  "
             f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
-            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → "
-            f"{s.tick_value_sats} sat[/]  [{DIM}]· ctrl+d[/] [{GOLD}]doggie[/]  "
-            f"[{DIM}]· session {s.session_id or '—'}[/]"
+            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → {s.tick_value_sats} sat[/]"
             + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
@@ -1003,10 +1000,12 @@ class SidepitApp(App):
         self.copy_to_clipboard(addr)
         self.add_event("ok", f"id copied: {addr}")
 
-    def on_button_pressed(self, event: Button.Pressed) -> None:
-        if event.button.id == "copy-id":
+    def on_click(self, event) -> None:
+        w = getattr(event, "widget", None)
+        if w is not None and w.id in ("titlebar", "session"):
             self.copy_id()
-            return
+
+    def on_button_pressed(self, event: Button.Pressed) -> None:
         if event.button.id in ("buy-mkt", "sell-mkt"):
             verb = "buy" if event.button.id == "buy-mkt" else "sell"
             qty = self._q("#qty", Input).value.strip() or "1"
