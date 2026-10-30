@@ -597,8 +597,7 @@ class SidepitApp(App):
                     else f"[{RED}]AGENT[/] · not authorized yet")
         else:
             mode = f"[{GOLD}]SIGNING[/]"
-        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/] "
-                  f"[{DIM}](click copies id)[/]" if s.address else "account  —",
+        dlines = [f"account  [{BRIGHT}]{s.address}[/]" if s.address else "account  —",
                   f"mode     {mode}"]
         if s.is_delegate:
             dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
@@ -740,7 +739,7 @@ class SidepitApp(App):
                 ("agent" if s.delegate_active else "agent · unverified")
                 if s.is_delegate else "signing")
         spread = s.ask - s.bid if s.ask and s.bid else 0
-        account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
+        account = s.address or "—"
         self._q("#titlebar", Static).update(
             f"[{BRIGHT}]sidepit // cockpit[/]  "
             f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]  "
@@ -749,7 +748,7 @@ class SidepitApp(App):
             f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]  "
             f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]  "
             f"[{DIM}]spread {spread or '—'}[/]\n"
-            f"[{DIM}]account[/] [{BRIGHT}]{account}[/] [{DIM}](click copies id)[/]  "
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  "
             f"[{DIM}]· {mode} ·[/]  "
             f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
             f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → {s.tick_value_sats} sat[/]"
