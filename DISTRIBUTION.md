@@ -1,9 +1,15 @@
 # Sidepit distribution record
 
-Status: **v0.1.0 is live on PyPI** as `sidepit`. **v0.1.1 is the release
-candidate**: the cockpit TUI no longer triggers whole-order-book snapshot
-broadcasts (12129) to refresh its open-orders view; open orders come from the
-account's POSITIONS reply. No SDK API changes.
+Status: **v0.1.1 is live on PyPI** as `sidepit`. **v0.1.2 is in preparation**
+on the `ci-install-proof` branch: `pip install sidepit` works on Linux, macOS
+(Apple Silicon and Intel) and Windows with nothing to compile — upstream
+`secp256k1` wheels where they exist, sidepit's own platform wheels with
+libsecp256k1 compiled in (stable ABI, one per platform) on Windows and Intel
+macOS; `ripemd-hash` dropped for a pure-Python fallback. Every release now
+passes the four-platform install proof (`.github/workflows/install-proof.yml`)
+before it can be uploaded, and release artifacts come from CI only. The cockpit
+starts keyless on the live market; identities are added from the doors or
+ctrl+a.
 
 This file records the distribution decisions made for the public client. It is
 the durable boundary between what works today and what is deliberately next.

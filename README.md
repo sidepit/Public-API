@@ -57,20 +57,73 @@ sending straight to the lock address does not identify the intended account.
 
 ## Claude + Sidepit: two terminals
 
-Install the cockpit and SDK from anywhere, then clone the skills:
+**Step 1 — install the cockpit.** Python 3.10 or newer. Nothing compiles: every piece arrives as a prebuilt
+wheel on Linux, macOS (Apple Silicon and Intel) and Windows. Pick your machine
+and follow the steps top to bottom.
+
+**Windows — recommended: WSL2 (Ubuntu inside Windows)**
+
+1. Start menu → type `PowerShell` → *Run as administrator*. In it:
+   ```powershell
+   wsl --install
+   ```
+   (Windows 10 2004+ or Windows 11.)
+2. Reboot when asked. Ubuntu opens by itself and asks for a username and a
+   password — pick any; this is your Linux user, not your Windows login.
+3. In that Ubuntu window:
+   ```sh
+   sudo apt update && sudo apt install -y pipx
+   pipx install sidepit
+   pipx ensurepath
+   ```
+4. Close the Ubuntu window, open it again (Start menu → *Ubuntu*), run:
+   ```sh
+   sidepit
+   ```
+   You get the Linux cockpit, and Claude Code runs beside it in the same terminal.
+
+**Windows — native, no WSL2**
+
+1. Start menu → `PowerShell`. In it:
+   ```powershell
+   winget install Python.Python.3.12
+   ```
+   (Or python.org's installer with *Add python.exe to PATH* ticked.)
+2. Open a **new** terminal — the old one does not see Python yet.
+3. ```powershell
+   python -m pip install sidepit
+   sidepit
+   ```
+   Windows Terminal renders the cockpit best. Keys live in `%USERPROFILE%\.sidepit\keys`.
+
+**macOS (Apple Silicon or Intel)**
+
+1. Install Python from <https://www.python.org/downloads/> (the `.pkg`
+   installer). No Xcode tools, no Homebrew needed.
+2. Open a **new** Terminal window (Applications → Utilities → Terminal):
+   ```sh
+   pip3 install sidepit
+   sidepit
+   ```
+   Already on Homebrew? `brew install pipx && pipx install sidepit && pipx ensurepath`,
+   then reopen Terminal.
+
+**Linux (Ubuntu / Debian)**
 
 ```sh
-pip install sidepit
-git clone --recurse-submodules https://github.com/sidepit/Public-API
+sudo apt update && sudo apt install -y pipx
+pipx install sidepit
+pipx ensurepath
 ```
+Reopen the terminal, run `sidepit`. Other distros: `pip install sidepit` inside a venv.
 
-Prefer an isolated app install? Use `pipx install sidepit`. If your system
-requires a virtual environment:
+First run opens on the live market with no identity. Create, import or watch
+one from the doors, or press Escape to just look and add a key later with ctrl+a.
+
+**Step 2 — clone the skills** (Claude reads them; the cockpit does not need them):
 
 ```sh
-python3 -m venv .venv
-source .venv/bin/activate
-pip install sidepit
+git clone --recurse-submodules https://github.com/sidepit/Public-API
 ```
 
 Terminal one — the cockpit:
@@ -92,7 +145,7 @@ Tell Claude:
 
 **Claude | Sidepit | make money!** Your key, your sizing, your risk, your call.
 
-Using Sidepit as a Python SDK? The same installation gives your code:
+Using Sidepit as a Python SDK? `pip install sidepit` in your project's venv gives your code:
 
 ```python
 from sidepit_trader import RequestClient, Signer, Submitter

@@ -117,7 +117,12 @@ def identity(name: str) -> dict | None:
     if "SIDEPIT_ID" not in d:
         return None
     return {"name": name, "sidepit_id": d["SIDEPIT_ID"],
-            "wif": d.get("SIDEPIT_WIF")}
+            "wif": d.get("SIDEPIT_WIF"), "mnemonic": d.get("SIDEPIT_MNEMONIC")}
+
+
+def identity_path(name: str) -> Path:
+    """Where one named identity lives on disk (for the backup screen)."""
+    return _path(name)
 
 
 def active_name() -> str | None:

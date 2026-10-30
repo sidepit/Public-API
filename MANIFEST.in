@@ -1,0 +1,2 @@
+include tools/vendor_secp256k1.py
+include tools/secp256k1_ffi.py

@@ -29,7 +29,7 @@ from textual.containers import Container, Grid, Horizontal, Vertical
 from textual.coordinate import Coordinate
 from textual.css.query import NoMatches
 from textual.screen import ModalScreen
-from textual.widgets import (Button, DataTable, Input, Label, RichLog, Select,
+from textual.widgets import (Button, DataTable, Footer, Input, Label, RichLog, Select,
                              Static, TabbedContent, TabPane)
 
 from .bridge import Bridge, Snap
@@ -129,6 +129,12 @@ def qr_unicode(data: str) -> str:
     return "\n".join(lines)
 
 
+def _working(bids: int, asks: int) -> str:
+    if not bids and not asks:
+        return "no orders working"
+    return f"working: {bids} bid · {asks} ask"
+
+
 def hhmm_left(close_ms: int) -> str:
     left = close_ms / 1000 - time.time()
     if left <= 0:
@@ -199,6 +205,7 @@ class ShowSecret(ModalScreen[None]):
 # ---------------------------------------------------------------------------
 class SidepitApp(App):
     TITLE = "sidepit // cockpit"
+    ENABLE_COMMAND_PALETTE = False     # Textual's ctrl+p search box: not for traders
     BINDINGS = [("ctrl+q", "quit", "quit"), ("ctrl+r", "refresh", "refresh"),
                 ("ctrl+a", "accounts", "accounts"),
                 ("ctrl+d", "doggie", "doggie view")]
@@ -208,7 +215,7 @@ class SidepitApp(App):
                align-vertical: middle; }}
     #titlebar {{ height: 3; width: 1fr; background: {PANEL}; color: {DIM};
                  padding: 0 1; content-align-vertical: middle; }}
-    #wallet-pick {{ width: 30; height: 1; background: {PANEL}; }}
+    #wallet-pick {{ width: 24; height: 1; background: {PANEL}; }}
     #denom-pick {{ width: 12; height: 1; background: {PANEL}; }}
     #wallet-pick SelectCurrent, #denom-pick SelectCurrent {{ height: 1; border: none;
                                                             background: {PANEL};
@@ -237,6 +244,9 @@ class SidepitApp(App):
                color: {BRIGHT}; }}
     #prompt:focus {{ border: none; }}
     #prompt .input--placeholder {{ color: {DIM}; text-style: italic; }}
+    #hint {{ height: 1; padding: 0 1; }}
+    #qty {{ width: 7; height: 1; margin: 0 1; }}
+    #buy-mkt, #sell-mkt {{ min-width: 8; height: 1; margin: 0 1 0 0; }}
     #prompt .input--cursor {{ background: {GREEN}; color: {BG}; }}
     #prompt .input--selection {{ background: {GREEN_DIM}; }}
     .try {{ height: 1; padding: 0; min-width: 0; border: none;
@@ -356,11 +366,18 @@ class SidepitApp(App):
                         yield Static("", id="book", classes="panel")
                         yield Static(title("activity"), id="activity-title")
                         yield RichLog(markup=True, wrap=True, id="log")
+                        yield Static(f"[{DIM}]type: buy 1 at market · sell 2 @ 1259 · "
+                                     f"cancel all · go flat · ctrl+d wallet[/]",
+                                     id="hint")
                         with Horizontal(id="promptrow"):
                             yield Label("trader@sidepit ›", id="promptlabel")
                             yield Input(placeholder='say what you want. plain english. '
                                                     'e.g. "go flat and exit"',
                                         id="prompt")
+                            yield Input(value="1", placeholder="qty", id="qty", compact=True,
+                                        type="integer", max_length=3)
+                            yield Button("BUY", variant="success", id="buy-mkt", compact=True)
+                            yield Button("SELL", variant="error", id="sell-mkt", compact=True)
                     with Vertical(id="right"):
                         yield Static(title("session"), classes="paneltitle")
                         yield Static("", id="session", classes="panel")
@@ -430,6 +447,7 @@ class SidepitApp(App):
                             yield Button("register", variant="success", id="register")
                         yield Static("", id="del-derived")
         yield Static("", id="statbar")
+        yield Footer()
 
     open_doggie_on_start = False       # set by `sidepit doggie`
 
@@ -470,8 +488,11 @@ class SidepitApp(App):
                              on_event=lambda k, t: self.call_from_thread(self.add_event, k, t))
         self.bridge.set_identity(address, wif)
         self.bridge.start()
-        mode = "watch-only" if wif is None else "custody key loaded"
-        self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        if address:
+            mode = "watch-only" if wif is None else "custody key loaded"
+            self.add_event("sys", f"session {address} · {mode} · host {self.host}")
+        else:
+            self.add_event("sys", f"market only — no identity · host {self.host}")
         self.refresh_wallets()     # keep the dropdown honest after any switch
         self.add_event("sys", HELP)
         # A delegate may TRADE and cancel — never move money or change who is
@@ -537,7 +558,7 @@ class SidepitApp(App):
                 f"  entry {p['entry_price']} · mark {s.last or '—'} · "
                 f"pnl [{color}]{self.money(upnl, signed=True)}[/]\n"
                 f"  [{DIM}]entry resets daily at settlement · "
-                f"{p['open_bids']}b/{p['open_asks']}a working[/]")
+                f"{_working(p['open_bids'], p['open_asks'])}[/]")
         self._q("#positions", Static).update(
             "\n".join(lines) or f"[{DIM}]no positions[/]")
         # risk envelope — real numbers, BTC-denominated
@@ -576,8 +597,7 @@ class SidepitApp(App):
                     else f"[{RED}]AGENT[/] · not authorized yet")
         else:
             mode = f"[{GOLD}]SIGNING[/]"
-        dlines = [f"account  [{BRIGHT}]{s.address[:14]}…{s.address[-4:]}[/]" if s.address
-                  else "account  —",
+        dlines = [f"account  [{BRIGHT}]{s.address}[/]" if s.address else "account  —",
                   f"mode     {mode}"]
         if s.is_delegate:
             dlines.append(f"[{DIM}]trading only — fund/withdraw need the "
@@ -719,24 +739,23 @@ class SidepitApp(App):
                 ("agent" if s.delegate_active else "agent · unverified")
                 if s.is_delegate else "signing")
         spread = s.ask - s.bid if s.ask and s.bid else 0
-        account = (f"{s.address[:10]}…{s.address[-4:]}" if s.address else "—")
+        account = s.address or "—"
         self._q("#titlebar", Static).update(
-            f"[{BRIGHT}]sidepit // cockpit[/] [{DIM}]v1[/]   "
-            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]   "
-            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]   "
-            f"[{GOLD}]last {s.last or '—'}[/]  [{BRIGHT}]{usd_hint(s.last)}[/]   "
-            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]   "
-            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]   "
+            f"[{BRIGHT}]sidepit // cockpit[/]  "
+            f"{dot} [{BRIGHT}]{s.state.removeprefix('EXCHANGE_')}[/]  "
+            f"[{BRIGHT}]{s.ticker or 'NO CONTRACT'}[/]  "
+            f"[{GOLD}]last {s.last or '—'}[/] [{BRIGHT}]{usd_hint(s.last)}[/]  "
+            f"[{GREEN}]bid {s.bid or '—'} × {s.bidsize or '—'}[/]  "
+            f"[{RED}]ask {s.ask or '—'} × {s.asksize or '—'}[/]  "
             f"[{DIM}]spread {spread or '—'}[/]\n"
-            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  [{DIM}]· {mode} ·[/]  "
+            f"[{DIM}]account[/] [{BRIGHT}]{account}[/]  "
+            f"[{DIM}]· {mode} ·[/]  "
             f"[{DIM}]contract[/] [{BRIGHT}]${s.contract_usd:,}[/]  "
-            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → "
-            f"{s.tick_value_sats} sat[/]  [{DIM}]· ctrl+d[/] [{GOLD}]doggie[/]  "
-            f"[{DIM}]· session {s.session_id or '—'}[/]"
+            f"[{DIM}]tick[/] [{BRIGHT}]{s.tick_size_sats} sat/USD → {s.tick_value_sats} sat[/]"
             + (f"  [{DIM}]· closes {hhmm_left(s.close_ms)}[/]" if s.is_open else ""))
         env = "RESTRICTED" if s.is_restricted else "SAFE"
         self._q("#statbar", Static).update(
-            f"{dot} auction sync · envelope: "
+            f"{dot} {'OPEN' if s.is_open else 'CLOSED'} · envelope: "
             f"[{RED if s.is_restricted else GREEN}]{env}[/] · book: transparent · "
             f"denom: [{GOLD}]{self.denom}[/] · session {s.session_id or '—'}")
 
@@ -744,7 +763,7 @@ class SidepitApp(App):
     def _refresh_book(self) -> None:
         """5-level transparent book + spread bar with the DLOB countdown."""
         s = self.snap
-        out = [title("book · transparent · DLOB 1s deterministic auctions")]
+        out = [title("book")]
         if not s.depth_bids and not s.depth_asks:
             out.append(f"[{DIM}]no live book (exchange {s.state})[/]")
         else:
@@ -753,10 +772,8 @@ class SidepitApp(App):
             for px, sz in reversed(s.depth_asks[:5]):
                 bar = "█" * max(1, int(sz / mx * 22))
                 out.append(f"  [{RED}]{px:>7}[/]  {sz:>4}  [{RED_DIM}]{bar}[/]")
-            t_left = 1.0 - (time.time() % 1.0)
-            badge = (f"[{GOLD}]AUCTION ARMED[/] [{DIM}]·[/] "
-                     f"[{GOLD}]t-{t_left:.2f}s[/]" if s.is_open
-                     else f"[{DIM}]auction idle ({s.state})[/]")
+            badge = (f"[{GREEN}]open[/]" if s.is_open
+                     else f"[{DIM}]closed ({s.state})[/]")
             spread = (s.depth_asks[0][0] - s.depth_bids[0][0]
                       if s.depth_asks and s.depth_bids else 0)
             out.append("")
@@ -928,6 +945,11 @@ class SidepitApp(App):
         if b is None or s.watch_only:
             self.add_event("err", "watch-only session — no signing key loaded")
             return
+        if it.kind in ("LMT", "MKT", "FLATTEN_ALL") and not s.is_open:
+            opens = hhmm_left(s.open_ms)
+            self.add_event("err", "market is closed — order not sent"
+                           + (f" · opens in {opens}" if opens else ""))
+            return
         if it.kind == "LMT":
             b.cmd("order", it.side, it.price, it.size)
         elif it.kind == "MKT":
@@ -967,7 +989,35 @@ class SidepitApp(App):
         except ValueError:
             return None
 
+    def copy_id(self) -> None:
+        """Put the full sidepit_id on the clipboard; the panels only show a
+        shortened one. Pop-up confirms, log keeps the whole address."""
+        addr = self.snap.address
+        if not addr:
+            self.add_event("warn", "no identity yet — ctrl+a adds one")
+            return
+        self.copy_to_clipboard(addr)
+        self.add_event("ok", f"id copied: {addr}")
+
+    def on_click(self, event) -> None:
+        w = getattr(event, "widget", None)
+        if w is not None and w.id in ("titlebar", "session"):
+            self.copy_id()
+
     def on_button_pressed(self, event: Button.Pressed) -> None:
+        if event.button.id in ("buy-mkt", "sell-mkt"):
+            verb = "buy" if event.button.id == "buy-mkt" else "sell"
+            qty = self._q("#qty", Input).value.strip() or "1"
+            self.add_event("cmd", f'"{verb} {qty} at market"')
+            try:
+                it = parse(f"{verb} {qty} at market", last_sats=self.snap.last,
+                           contract_usd=self.snap.contract_usd)
+            except ValueError as e:
+                self.add_event("err", str(e))
+                return
+            self.add_event("sys", it.summary)
+            self._execute(it)
+            return
         bid = event.button.id or ""
         b = self.bridge
         if bid.startswith("try-"):
@@ -980,8 +1030,9 @@ class SidepitApp(App):
         if bid == "chain-refresh":
             b.cmd("chain_refresh")
         elif bid == "fund-show":
-            self.add_event("ok", f"send BTC to {self.snap.address} — it appears "
-                                 f"here automatically, then LOCK goes green")
+            self.copy_to_clipboard(self.snap.address)
+            self.add_event("ok", f"address copied: {self.snap.address} — send BTC "
+                                 f"to it; it appears here automatically, then LOCK goes green")
         elif bid == "lock-all":
             total = self.snap.chain_confirmed + self.snap.chain_mempool
             if total <= 0:

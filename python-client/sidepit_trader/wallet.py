@@ -31,6 +31,7 @@ from dataclasses import dataclass
 import base58
 from secp256k1 import PrivateKey
 
+from .ripemd160 import ripemd160
 from .signer import Signer, wif_to_priv_hex
 
 # Deposit/lock address + chain endpoints — centralized in config (optional
@@ -130,13 +131,9 @@ def decode_segwit(addr: str, hrp: str = "bc"):
 # hashing
 # ---------------------------------------------------------------------------
 def _ripemd160(b: bytes) -> bytes:
-    # hashlib's ripemd160 is CORRECT (the "…0bff for abc" vector is a decades-old typo; truth
-    # is "…0bfc"). Some OpenSSL-3 builds disable it; fall back to the `ripemd` pkg if needed.
-    try:
-        return hashlib.new("ripemd160", b).digest()
-    except Exception:
-        from ripemd.ripemd160 import ripemd160  # users-cli dep, pure-python
-        return bytes.fromhex(ripemd160(b).hex()) if not isinstance(ripemd160(b), (bytes, bytearray)) else bytes(ripemd160(b))
+    # hashlib when this OpenSSL has ripemd160, else the SDK's pure-Python fallback —
+    # nothing to compile at install time (see ripemd160.py for the vectors).
+    return ripemd160(b)
 
 
 def _hash160(b: bytes) -> bytes:

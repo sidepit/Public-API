@@ -384,7 +384,7 @@ class Bridge(threading.Thread):
                 self.on_event("success",
                               f"order submitted {('BUY' if side > 0 else 'SELL')} "
                               f"{size} @ {price} → {oid[-18:]} "
-                              f"(resolves next epoch — watch Open Orders)")
+                              f"(working — see Working Orders)")
                 self._last["account"] = 0.0   # refresh orders soon
             elif verb == "cancel":
                 _, oid = parts
@@ -397,7 +397,7 @@ class Bridge(threading.Thread):
                 oid = self._submitter().market_order(side, size, s.ticker)
                 self.on_event("success",
                               f"MARKET {('BUY' if side > 0 else 'SELL')} {size} → "
-                              f"{oid[-18:]} · fills what it can in the next auction, the rest cancels")
+                              f"{oid[-18:]} · fills what's there, the rest cancels")
                 self._last["account"] = 0.0
             elif verb == "cancel_all":
                 n = 0
@@ -420,7 +420,7 @@ class Bridge(threading.Thread):
                     closed += 1
                 self.on_event("success",
                               f"FLATTEN_ALL submitted · {len(s.open_orders)} cancel(s), "
-                              f"{closed} closing order(s) · verify next epoch")
+                              f"{closed} closing order(s) · check Working Orders")
                 self._last["account"] = 0.0
             elif verb == "unlock":
                 _, amount = parts

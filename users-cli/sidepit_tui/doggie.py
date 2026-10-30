@@ -53,7 +53,7 @@ def meter(s, now: float | None = None) -> dict:
     """
     import time as _time
     now = _time.time() if now is None else now
-    pos = sum(p["contracts"] for p in s.positions)
+    pos = sum(p["contracts"] for p in s.positions if p["ticker"] == s.ticker)  # one symbol
     maint = s.maint_margin_sats
     room = max(0, s.available_margin) // maint if maint > 0 else 0
     n_max = room + abs(pos)
@@ -118,7 +118,10 @@ class DoggieScreen(Screen):
         return equity_sats(s)[0]
 
     def _position(self, s) -> int:
-        return sum(p["contracts"] for p in s.positions)
+        # One symbol, by design (Jay, 2026-09-10): the wallet is the contract
+        # you tap. Other expiries are the cockpit's business — margin is charged
+        # per ticker, so netting them here would not match the meter.
+        return sum(p["contracts"] for p in s.positions if p["ticker"] == s.ticker)
 
     def _update_view(self) -> None:
         s = self.app.snap
@@ -127,8 +130,17 @@ class DoggieScreen(Screen):
         hedged_usd = pos * s.contract_usd
         eq_usd = eq / s.last if s.last else 0.0          # sats ÷ sats-per-USD
         self.query_one("#dog-value", Digits).update(f"{eq_usd:,.2f}")
+        # Today's result: realized (the exchange's number) + open P&L (marked
+        # here at the last trade), in dollars. Settled at the close -> nothing.
+        from .app import equity_sats
+        _, unreal = equity_sats(s)
+        pnl = ""
+        if s.is_open and s.last and unreal is not None:
+            pnl_usd = (s.realized_pnl + unreal) / s.last
+            pnl = (f" · [{DGREEN if pnl_usd >= 0 else ORANGE}]{'+' if pnl_usd >= 0 else '−'}"
+                   f"${abs(pnl_usd):,.0f} today[/][{MUT}]")
         self.query_one("#dog-sub", Static).update(
-            f"[{MUT}]your wealth · ${eq_usd:,.2f} · {eq / 1e8:.5f} ₿ · "
+            f"[{MUT}]your wealth · ${eq_usd:,.2f} · {eq / 1e8:.5f} ₿{pnl} · "
             f"{'live' if s.is_open else s.state}[/]")
         # THE POSITION is the star. Jay's format:
         #   Position(p) SIDE <btc> BITCOIN $<usd>
@@ -181,8 +193,8 @@ class DoggieScreen(Screen):
         if event.button.id == "tap-usd":
             # toward dollars: hedge $unit more = BUY one USDBTC contract
             b.cmd("market", 1, 1)
-            self.app.add_event("ok", f"${s.contract_usd} more USD at market price · fills in the next auction")
+            self.app.add_event("ok", f"${s.contract_usd} more USD at market price")
         elif event.button.id == "tap-btc":
             # toward bitcoin: unwind $unit of hedge = SELL one contract
             b.cmd("market", -1, 1)
-            self.app.add_event("ok", f"${s.contract_usd} more bitcoin at market price · fills in the next auction")
+            self.app.add_event("ok", f"${s.contract_usd} more bitcoin at market price")

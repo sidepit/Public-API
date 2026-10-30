@@ -23,6 +23,7 @@ owner registers its public key — it can never withdraw, appoint, or revoke
 """
 from __future__ import annotations
 
+import os
 import stat
 import sys
 
@@ -57,11 +58,14 @@ def mint(account: str) -> dict:
     path = keystore.save_identity(name, account, ident.wif, active=False)
 
     # post-write verification, from the file itself
+    # POSIX mode bits mean nothing on Windows (os.open(..., 0o600) reports 0o666);
+    # there the user-profile ACL protects the file, so only POSIX checks the mode.
     mode = stat.S_IMODE(path.stat().st_mode)
+    mode_ok = (os.name == "nt") or mode == 0o600
     d = keystore._parse(path)
     from .wallet import from_wif
     reread = from_wif(d.get("SIDEPIT_WIF", ""))
-    if mode != 0o600 or d.get("SIDEPIT_ID") != account \
+    if not mode_ok or d.get("SIDEPIT_ID") != account \
             or reread.sidepit_id != ident.sidepit_id:
         raise RuntimeError(f"verification of written key file failed: {path} "
                            f"(file kept — key files are never deleted)")
