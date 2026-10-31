@@ -55,7 +55,33 @@ The LOCK transaction tells Sidepit which account to credit: its input must spend
 from the Sidepit ID controlled by the customer. An external wallet or exchange
 sending straight to the lock address does not identify the intended account.
 
-## Claude + Sidepit: two terminals
+## Get started
+
+Choose the [website](#use-the-website) or the [command-line cockpit](#use-the-command-line-cockpit).
+
+You can also start by asking your agent to onboard you. Give it the
+[onboarding playbook](skills/sidepit-onboarding/SKILL.md) and say:
+
+> Read https://github.com/sidepit/Public-API/blob/main/skills/sidepit-onboarding/SKILL.md
+> and onboard me. Ask whether I prefer the website or the command line.
+
+The agent should guide your chosen path. A terminal agent can guide you through
+the website just as a browser assistant can.
+
+### Use the website
+
+Start with the [Sidepit user docs](https://docs.sidepit.com) and open
+[the trading app](https://app.sidepit.com). Follow the docs for wallet setup,
+funding and authorizing an agent. This path needs no cockpit installation or
+repository clone.
+
+For help in your browser, open [Claude](https://claude.ai) or
+[ChatGPT](https://chatgpt.com) and paste the onboarding prompt above, adding
+"Use the website." Keep the assistant beside the trading app as you follow the
+guide. Agents can read the docs through [llms.txt](https://docs.sidepit.com/llms.txt)
+and its linked Markdown pages.
+
+### Use the command-line cockpit
 
 **Step 1 — install the cockpit.** Pick your machine, follow the steps.
 
@@ -115,27 +141,14 @@ Reopen the terminal, run `sidepit`. Other distros: `pip install sidepit` inside 
 First run opens on the live market with no identity. Create, import or watch
 one from the doors, or press Escape to just look and add a key later with ctrl+a.
 
-**Step 2 — bring your agent.** Claude Code and Codex are the ones we test with;
-any agent that can read a repo works. The two terminal agents need Node.js,
-which brings `npm`: Windows native and macOS install it from <https://nodejs.org>
-(the LTS installer); WSL2 and Linux run `sudo apt install -y nodejs npm`. The
-web option needs nothing. Pick one:
+**Step 2 — bring your terminal agent.** Claude Code and Codex are the ones we
+test with. If you already use a terminal agent, continue to Step 3. Otherwise,
+follow its official installation guide for your operating system:
 
-- **Claude Code** (terminal; also built into the Claude desktop app):
-  ```sh
-  npm install -g @anthropic-ai/claude-code
-  ```
-- **Codex** (terminal; also the Codex desktop app):
-  ```sh
-  npm install -g @openai/codex
-  ```
-- **No install — the web:** open claude.ai or chatgpt.com and paste:
-  > Read https://github.com/sidepit/Public-API/blob/main/AGENTS.md and onboard me.
-
-  That is your whole Step 3: the browser agent reads the playbooks from GitHub,
-  so there is nothing to clone. Keep the cockpit in one terminal and the browser
-  beside it, and go on to **Then, in the cockpit** below.
-- **Any other agent or open-source CLI model:** point it at this repo's `AGENTS.md`.
+- [Install Claude Code](https://code.claude.com/docs/en/setup), then run `claude`.
+- [Install Codex](https://learn.chatgpt.com/docs/codex/cli), then run `codex`.
+- For another terminal agent, follow its installation guide and point it at
+  this repo's `AGENTS.md`.
 
 **Step 3 — two terminals** (terminal agents only). Clone the repo (your agent
 reads the playbooks in it; the cockpit does not need them):
@@ -159,7 +172,7 @@ claude        # or: codex
 
 Tell it:
 
-> Read `skills/sidepit-onboarding/SKILL.md` and onboard me.
+> Read `skills/sidepit-onboarding/SKILL.md` and onboard me using the cockpit.
 
 **Then, in the cockpit:**
 
