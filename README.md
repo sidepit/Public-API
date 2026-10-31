@@ -115,7 +115,23 @@ Reopen the terminal, run `sidepit`. Other distros: `pip install sidepit` inside 
 First run opens on the live market with no identity. Create, import or watch
 one from the doors, or press Escape to just look and add a key later with ctrl+a.
 
-**Step 2 — clone the skills** (Claude reads them; the cockpit does not need them):
+**Step 2 — bring your agent.** Claude Code and Codex are the ones we test with;
+any agent that can read a repo works. Pick one:
+
+- **Claude Code** (terminal; also built into the Claude desktop app):
+  ```sh
+  npm install -g @anthropic-ai/claude-code
+  ```
+- **Codex** (terminal; also the Codex desktop app):
+  ```sh
+  npm install -g @openai/codex
+  ```
+- **No install — the web:** open claude.ai or chatgpt.com and paste:
+  > Read https://github.com/sidepit/Public-API/blob/main/AGENTS.md and onboard me.
+- **Any other agent or open-source CLI model:** point it at this repo's `AGENTS.md`.
+
+**Step 3 — two terminals.** Clone the repo (your agent reads the playbooks in it;
+the cockpit does not need them):
 
 ```sh
 git clone --recurse-submodules https://github.com/sidepit/Public-API
@@ -127,14 +143,14 @@ Terminal one — the cockpit:
 sidepit
 ```
 
-Terminal two — Claude with the Sidepit playbook:
+Terminal two — your agent, inside the repo (`claude` or `codex`):
 
 ```sh
 cd Public-API
 claude
 ```
 
-Tell Claude:
+Tell it:
 
 > Read `skills/sidepit-onboarding/SKILL.md` and onboard me.
 
