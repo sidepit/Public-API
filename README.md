@@ -95,8 +95,10 @@ sending straight to the lock address does not identify the intended account.
 
 1. Download and install Python 3.13:
    <https://www.python.org/ftp/python/3.13.17/python-3.13.17-macos11.pkg>
-2. Open Terminal (Applications → Utilities → Terminal).
-3. ```sh
+2. When the installer finishes it opens the *Python 3.13* folder. Double-click
+   `Install Certificates.command` in it.
+3. Open Terminal (Applications → Utilities → Terminal).
+4. ```sh
    pip3 install sidepit
    sidepit
    ```
