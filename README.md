@@ -116,7 +116,10 @@ First run opens on the live market with no identity. Create, import or watch
 one from the doors, or press Escape to just look and add a key later with ctrl+a.
 
 **Step 2 — bring your agent.** Claude Code and Codex are the ones we test with;
-any agent that can read a repo works. Pick one:
+any agent that can read a repo works. The two terminal agents need Node.js,
+which brings `npm`: Windows native and macOS install it from <https://nodejs.org>
+(the LTS installer); WSL2 and Linux run `sudo apt install -y nodejs npm`. The
+web option needs nothing. Pick one:
 
 - **Claude Code** (terminal; also built into the Claude desktop app):
   ```sh
@@ -128,10 +131,14 @@ any agent that can read a repo works. Pick one:
   ```
 - **No install — the web:** open claude.ai or chatgpt.com and paste:
   > Read https://github.com/sidepit/Public-API/blob/main/AGENTS.md and onboard me.
+
+  That is your whole Step 3: the browser agent reads the playbooks from GitHub,
+  so there is nothing to clone. Keep the cockpit in one terminal and the browser
+  beside it, and go on to **Then, in the cockpit** below.
 - **Any other agent or open-source CLI model:** point it at this repo's `AGENTS.md`.
 
-**Step 3 — two terminals.** Clone the repo (your agent reads the playbooks in it;
-the cockpit does not need them):
+**Step 3 — two terminals** (terminal agents only). Clone the repo (your agent
+reads the playbooks in it; the cockpit does not need them):
 
 ```sh
 git clone --recurse-submodules https://github.com/sidepit/Public-API
@@ -143,11 +150,11 @@ Terminal one — the cockpit:
 sidepit
 ```
 
-Terminal two — your agent, inside the repo (`claude` or `codex`):
+Terminal two — your agent, inside the repo:
 
 ```sh
 cd Public-API
-claude
+claude        # or: codex
 ```
 
 Tell it:
