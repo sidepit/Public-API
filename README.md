@@ -154,7 +154,17 @@ Tell it:
 
 > Read `skills/sidepit-onboarding/SKILL.md` and onboard me.
 
-**Claude | Sidepit | make money!** Your key, your sizing, your risk, your call.
+**Then, in the cockpit:**
+
+1. **Fund** — send BTC to your address on the fund tab, then press LOCK. That
+   opens your account.
+2. **Delegate** — ask your agent to generate its own agent key and hand you the
+   delegate pubkey. Delegates tab → paste it → register. Your agent can now
+   trade for you; it can never withdraw.
+3. **Doggie** — press ctrl+d for the wallet view: more USD or more BTC, two
+   buttons, you decide.
+
+Your key, your sizing, your risk, your call.
 
 Using Sidepit as a Python SDK? `pip install sidepit` in your project's venv gives your code:
 
