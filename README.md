@@ -55,11 +55,35 @@ The LOCK transaction tells Sidepit which account to credit: its input must spend
 from the Sidepit ID controlled by the customer. An external wallet or exchange
 sending straight to the lock address does not identify the intended account.
 
-## Claude + Sidepit: two terminals
+## Get started
 
-**Step 1 — install the cockpit.** Python 3.10 or newer. Nothing compiles: every piece arrives as a prebuilt
-wheel on Linux, macOS (Apple Silicon and Intel) and Windows. Pick your machine
-and follow the steps top to bottom.
+Choose the [website](#use-the-website) or the [command-line cockpit](#use-the-command-line-cockpit).
+
+You can also start by asking your agent to onboard you. Give it the
+[onboarding playbook](skills/sidepit-onboarding/SKILL.md) and say:
+
+> Read https://github.com/sidepit/Public-API/blob/main/skills/sidepit-onboarding/SKILL.md
+> and onboard me. Ask whether I prefer the website or the command line.
+
+The agent should guide your chosen path. A terminal agent can guide you through
+the website just as a browser assistant can.
+
+### Use the website
+
+Start with the [Sidepit user docs](https://docs.sidepit.com) and open
+[the trading app](https://app.sidepit.com). Follow the docs for wallet setup,
+funding and authorizing an agent. This path needs no cockpit installation or
+repository clone.
+
+For help in your browser, open [Claude](https://claude.ai) or
+[ChatGPT](https://chatgpt.com) and paste the onboarding prompt above, adding
+"Use the website." Keep the assistant beside the trading app as you follow the
+guide. Agents can read the docs through [llms.txt](https://docs.sidepit.com/llms.txt)
+and its linked Markdown pages.
+
+### Use the command-line cockpit
+
+**Step 1 — install the cockpit.** Pick your machine, follow the steps.
 
 **Windows — recommended: WSL2 (Ubuntu inside Windows)**
 
@@ -84,29 +108,26 @@ and follow the steps top to bottom.
 
 **Windows — native, no WSL2**
 
-1. Start menu → `PowerShell`. In it:
-   ```powershell
-   winget install Python.Python.3.12
-   ```
-   (Or python.org's installer with *Add python.exe to PATH* ticked.)
-2. Open a **new** terminal — the old one does not see Python yet.
+1. Download and install Python 3.13:
+   <https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.exe>
+   — tick *Add python.exe to PATH* on the first screen.
+2. Start menu → `PowerShell`.
 3. ```powershell
-   python -m pip install sidepit
+   pip install sidepit
    sidepit
    ```
-   Windows Terminal renders the cockpit best. Keys live in `%USERPROFILE%\.sidepit\keys`.
 
 **macOS (Apple Silicon or Intel)**
 
-1. Install Python from <https://www.python.org/downloads/> (the `.pkg`
-   installer). No Xcode tools, no Homebrew needed.
-2. Open a **new** Terminal window (Applications → Utilities → Terminal):
-   ```sh
+1. Download and install Python 3.13:
+   <https://www.python.org/ftp/python/3.13.17/python-3.13.17-macos11.pkg>
+2. When the installer finishes it opens the *Python 3.13* folder. Double-click
+   `Install Certificates.command` in it.
+3. Open Terminal (Applications → Utilities → Terminal).
+4. ```sh
    pip3 install sidepit
    sidepit
    ```
-   Already on Homebrew? `brew install pipx && pipx install sidepit && pipx ensurepath`,
-   then reopen Terminal.
 
 **Linux (Ubuntu / Debian)**
 
@@ -120,7 +141,17 @@ Reopen the terminal, run `sidepit`. Other distros: `pip install sidepit` inside 
 First run opens on the live market with no identity. Create, import or watch
 one from the doors, or press Escape to just look and add a key later with ctrl+a.
 
-**Step 2 — clone the skills** (Claude reads them; the cockpit does not need them):
+**Step 2 — bring your terminal agent.** Claude Code and Codex are the ones we
+test with. If you already use a terminal agent, continue to Step 3. Otherwise,
+follow its official installation guide for your operating system:
+
+- [Install Claude Code](https://code.claude.com/docs/en/setup), then run `claude`.
+- [Install Codex](https://learn.chatgpt.com/docs/codex/cli), then run `codex`.
+- For another terminal agent, follow its installation guide and point it at
+  this repo's `AGENTS.md`.
+
+**Step 3 — two terminals** (terminal agents only). Clone the repo (your agent
+reads the playbooks in it; the cockpit does not need them):
 
 ```sh
 git clone --recurse-submodules https://github.com/sidepit/Public-API
@@ -132,18 +163,28 @@ Terminal one — the cockpit:
 sidepit
 ```
 
-Terminal two — Claude with the Sidepit playbook:
+Terminal two — your agent, inside the repo:
 
 ```sh
 cd Public-API
-claude
+claude        # or: codex
 ```
 
-Tell Claude:
+Tell it:
 
-> Read `skills/sidepit-onboarding/SKILL.md` and onboard me.
+> Read `skills/sidepit-onboarding/SKILL.md` and onboard me using the cockpit.
 
-**Claude | Sidepit | make money!** Your key, your sizing, your risk, your call.
+**Then, in the cockpit:**
+
+1. **Fund** — send BTC to your address on the fund tab, then press LOCK. That
+   opens your account.
+2. **Delegate** — ask your agent to generate its own agent key and hand you the
+   delegate pubkey. Delegates tab → paste it → register. Your agent can now
+   trade for you; it can never withdraw.
+3. **Doggie** — press ctrl+d for the wallet view: more USD or more BTC, two
+   buttons, you decide.
+
+Your key, your sizing, your risk, your call.
 
 Using Sidepit as a Python SDK? `pip install sidepit` in your project's venv gives your code:
 
