@@ -131,11 +131,13 @@ class DoggieScreen(Screen):
         eq_usd = eq / s.last if s.last else 0.0          # sats ÷ sats-per-USD
         self.query_one("#dog-value", Digits).update(f"{eq_usd:,.2f}")
         # Today's result: realized (the exchange's number) + open P&L (marked
-        # here at the last trade), in dollars. Settled at the close -> nothing.
+        # here from the quote: a long at the ask, a short at the bid), in dollars. Settled at the close -> nothing.
         from .app import equity_sats
         _, unreal = equity_sats(s)
         pnl = ""
-        if s.is_open and s.last and unreal is not None:
+        if s.is_open and s.last and unreal is None:
+            pnl = " · open P&L — no quote"
+        elif s.is_open and s.last:
             pnl_usd = (s.realized_pnl + unreal) / s.last
             pnl = (f" · [{DGREEN if pnl_usd >= 0 else ORANGE}]{'+' if pnl_usd >= 0 else '−'}"
                    f"${abs(pnl_usd):,.0f} today[/][{MUT}]")

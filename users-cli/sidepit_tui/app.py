@@ -81,17 +81,40 @@ def btc(v_sats: int, signed: bool = False) -> str:
     return f"{s:+.5f} ₿" if signed else f"{s:.5f} ₿"
 
 
-def equity_sats(s) -> tuple[int, int]:
+def position_mark(s, p) -> int:
+    """The price a position is marked at: the quote, as the web app does it —
+    a long at the ask, a short at the bid. 0 = no mark (another ticker, or that
+    side of the quote is empty). Never falls back to the last trade."""
+    if p["ticker"] != s.ticker:
+        return 0
+    return max(0, s.ask if p["contracts"] > 0 else s.bid)
+
+
+def position_pnl(s, p) -> int | None:
+    """Open P&L of one position in sats; None when it cannot be marked."""
+    qty = p["contracts"]
+    if not qty:
+        return 0
+    mark = position_mark(s, p)
+    if not mark or not p["entry_price"]:
+        return None
+    return round(qty * (mark - p["entry_price"])
+                 * s.tick_value_sats / max(s.tick_size_sats, 1))
+
+
+def equity_sats(s) -> tuple[int, int | None]:
     """(equity, open_pnl) in sats. While OPEN: available balance + realized +
     open P&L. While CLOSED: just the settled available balance — the daily
-    mark-to-market already folded the pnl in, so no math."""
+    mark-to-market already folded the pnl in, so no math. open_pnl is None when
+    a held position has no mark; equity then leaves it out rather than guess."""
     if not s.is_open:
         return s.available_balance, 0
     unreal = 0
     for p in s.positions:
-        if p["contracts"] and s.last and p["entry_price"]:
-            unreal += int(p["contracts"] * (s.last - p["entry_price"])
-                          * s.tick_value_sats / max(s.tick_size_sats, 1))
+        pnl = position_pnl(s, p)
+        if pnl is None:
+            return s.available_balance + s.realized_pnl, None
+        unreal += pnl
     return s.available_balance + s.realized_pnl + unreal, unreal
 
 
@@ -318,6 +341,10 @@ class SidepitApp(App):
             sign = "+" if signed and v_sats >= 0 else ""
             return f"{sign}{v_sats:,} sats"
         return btc(v_sats, signed=signed)
+
+    def pnl_text(self, v_sats: int | None) -> str:
+        """Signed open P&L, or a dash when there is no quote to mark it at."""
+        return "— no quote" if v_sats is None else self.money(v_sats, signed=True)
 
     @staticmethod
     def _parse_money_input(raw: str, denom: str) -> int | None:
@@ -547,16 +574,13 @@ class SidepitApp(App):
             side = (f"[{GREEN}]LONG[/]" if qty > 0
                     else f"[{RED}]SHORT[/]" if qty < 0 else f"[{DIM}]FLAT[/]")
             notional = abs(qty) * s.contract_usd * (p["entry_price"] or s.last)
-            upnl = 0
-            if qty and s.last and p["entry_price"]:
-                upnl = int(qty * (s.last - p["entry_price"])
-                           * s.tick_value_sats / max(s.tick_size_sats, 1))
-            color = GREEN if upnl >= 0 else RED
+            upnl = position_pnl(s, p)
+            color = DIM if upnl is None else GREEN if upnl >= 0 else RED
             lines.append(
                 f"[{BRIGHT}]{p['ticker']}[/] {side} {abs(qty)} "
                 f"[{DIM}]·[/] [{BRIGHT}]{self.money(notional)}[/]\n"
-                f"  entry {p['entry_price']} · mark {s.last or '—'} · "
-                f"pnl [{color}]{self.money(upnl, signed=True)}[/]\n"
+                f"  entry {p['entry_price']} · mark {position_mark(s, p) or '—'} · "
+                f"pnl [{color}]{self.pnl_text(upnl)}[/]\n"
                 f"  [{DIM}]entry resets daily at settlement · "
                 f"{_working(p['open_bids'], p['open_asks'])}[/]")
         self._q("#positions", Static).update(
@@ -578,8 +602,8 @@ class SidepitApp(App):
             f"unlocking [{BRIGHT}]{self.money(s.pending_unlock)}[/]\n"
             + (f"realized  [{GREEN if s.realized_pnl >= 0 else RED}]"
                f"{self.money(s.realized_pnl, signed=True)}[/]\n"
-               f"open      [{GREEN if unreal_total >= 0 else RED}]"
-               f"{self.money(unreal_total, signed=True)}[/]\n" if s.is_open else
+               f"open      [{DIM if unreal_total is None else GREEN if unreal_total >= 0 else RED}]"
+               f"{self.pnl_text(unreal_total)}[/]\n" if s.is_open else
                f"[{DIM}]settled: marked-to-market[/]\n")
             + f"[{GREEN_DIM}]{'█' * fill}{'░' * (barw - fill)}[/] {state}\n"
             + f"[{DIM}]btc-denominated[/]")
@@ -933,7 +957,7 @@ class SidepitApp(App):
             equity, unreal = equity_sats(s)
             eq_usd = equity / s.last if s.last else 0.0
             pnl = (f"realized {self.money(s.realized_pnl, signed=True)} · open "
-                   f"{self.money(unreal, signed=True)}" if s.is_open
+                   f"{self.pnl_text(unreal)}" if s.is_open
                    else "settled: marked-to-market")
             self.add_event("sys",
                            f"equity {self.money(equity)} (${eq_usd:,.2f}) · margin used "
